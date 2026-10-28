@@ -363,7 +363,7 @@ public static class RetroCapScenarioRunner
         {
             session.DisableRule("startup");
             var locator = ElementLocator.ByOcrText(_startupText, TextMatch.Contains)
-                .Expanded(new Insets(22, 0, 2, 0), TextQuery.Containing(_neighborText)) with { MinConfidence = 0.6 };
+                .Expanded(new Insets(6, 0, 2, 0), TextQuery.Containing(_neighborText)) with { MinConfidence = 0.6 };
             session.AddRule(new OverlayRule { Id = "startup-ocr", Target = locator, Appearance = MaskAppearance.Transparent("#D81B60", 0.6) });
             var s = await session.WaitForRuleAsync("startup-ocr", x => x.State is RuleState.Active or RuleState.Unresolved, TimeSpan.FromSeconds(60), ct);
             r.ResolvedBy = s.Resolution?.ResolvedBy?.ToString();
@@ -376,12 +376,17 @@ public static class RetroCapScenarioRunner
             var glyph = new PixelRect(_t0.X + 2, _t0.Y + _t0.Height / 2 - 4, 8, 8);
             r.Check("Expanded OCR region includes the checkbox square", ocrRect.Contains(glyph), $"ocr {ocrRect}, glyph {glyph}");
             r.Check("Expanded OCR region does not cover the neighbor", !ocrRect.IntersectsWith(_n0), $"ocr {ocrRect}, neighbor {_n0}");
-            double iou = Iou(ocrRect, _t0);
-            r.Check("OCR geometry agrees with accessibility geometry", iou >= 0.5, $"IoU {iou:0.00} (OCR {ocrRect} vs UIA {_t0})");
+            // The CheckBox element spans the whole row (WPF stretches it), while OCR covers only the glyph and label, so
+            // compare where they start and how they overlap vertically rather than their areas.
+            int vOverlap = Math.Max(0, Math.Min(ocrRect.Bottom, _t0.Bottom) - Math.Max(ocrRect.Y, _t0.Y));
+            double vRatio = (double)vOverlap / Math.Min(ocrRect.Height, _t0.Height);
+            int leftGap = Math.Abs(ocrRect.X - _t0.X);
+            r.Check("OCR geometry agrees with accessibility geometry", vRatio >= 0.6 && leftGap <= 12,
+                $"OCR {ocrRect} vs UIA {_t0}: vertical overlap {vRatio:P0}, left edges {leftGap} px apart");
             var shot = await ScreenshotAsync("retrocap-ocr-mask.png", "ocrMask", ct);
             r.Screenshot = "retrocap-ocr-mask.png";
-            r.Check("Translucent OCR mask visible over the label", ImageAnalysis.Similarity(shot, _before!, _screen, _t0, ColorTolerance) < 0.5,
-                $"similarity to before {ImageAnalysis.Similarity(shot, _before!, _screen, _t0, ColorTolerance):P1}");
+            double ocrSimilarity = ImageAnalysis.Similarity(shot, _before!, _screen, ocrRect, ColorTolerance);
+            r.Check("Translucent OCR mask visible over the label", ocrSimilarity < 0.5, $"similarity to before over {ocrRect}: {ocrSimilarity:P1}");
             session.RemoveRule("startup-ocr");
             session.EnableRule("startup");
             await WaitOverlayAsync(session, _t0, ct);
@@ -543,12 +548,5 @@ public static class RetroCapScenarioRunner
 
         private static bool Near(PixelRect a, PixelRect b, int tol) =>
             Math.Abs(a.X - b.X) <= tol && Math.Abs(a.Y - b.Y) <= tol && Math.Abs(a.Right - b.Right) <= tol && Math.Abs(a.Bottom - b.Bottom) <= tol;
-
-        private static double Iou(PixelRect a, PixelRect b)
-        {
-            var i = a.Intersect(b).Area;
-            var u = a.Area + b.Area - i;
-            return u == 0 ? 0 : (double)i / u;
-        }
     }
 }
