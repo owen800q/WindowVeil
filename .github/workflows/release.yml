@@ -1,0 +1,209 @@
+name: Release
+
+# Every push to main (normally a merged, reviewed pull request) produces a new semantic version, but only
+# after the build, all automated tests and the interactive RetroCap UI test pass on that exact commit.
+# Recommended branch protection for main: require pull requests, at least one review, and the "CI" checks.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# Serialize releases so two merges cannot compute the same version. GitHub keeps at most one pending run per
+# group; a superseded pending run is covered by the next release (its notes list every commit since the last tag).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  CI: "true"
+
+jobs:
+  version:
+    name: Compute version
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.v.outputs.skip }}
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      previous_tag: ${{ steps.v.outputs.previous_tag }}
+      bump: ${{ steps.v.outputs.bump }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        name: Compute semantic version from tags and Conventional Commits
+        run: |
+          git fetch --tags --force
+          bash tools/compute-version.sh "${GITHUB_SHA}"
+      - name: Summary
+        run: echo "Version ${{ steps.v.outputs.version }} (bump ${{ steps.v.outputs.bump }}, skip=${{ steps.v.outputs.skip }})" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build, test and package
+    needs: version
+    if: needs.version.outputs.skip != 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    outputs:
+      sums_sha256: ${{ steps.sums.outputs.sha256 }}
+    env:
+      WINDOWVEIL_OCR_MODELS: ${{ github.workspace }}\models
+      WINDOWVEIL_REQUIRE_OCR_MODELS: "1"
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: ppocrv6-${{ hashFiles('tools/models.lock.json') }}
+      - shell: pwsh
+        run: ./tools/download-models.ps1
+      - run: dotnet restore WindowVeil.sln
+      - run: dotnet build WindowVeil.sln -c Release --no-restore "-p:Version=${{ env.VERSION }}"
+      - name: Unit, OCR and desktop integration tests
+        shell: pwsh
+        run: |
+          $failed = $false
+          $runs = @(
+            @{ P = 'WindowVeil.UnitTests'; F = '' },
+            @{ P = 'WindowVeil.OcrTests'; F = '' },
+            @{ P = 'WindowVeil.NativeTests'; F = 'Category=Desktop' },
+            @{ P = 'WindowVeil.WpfTests'; F = 'Category=Desktop' },
+            @{ P = 'WindowVeil.UiTests'; F = 'Category=Desktop' })
+          foreach ($r in $runs) {
+            $cmd = @('test', "tests/$($r.P)/$($r.P).csproj", '-c', 'Release', '--no-build',
+                      '--logger', "trx;LogFileName=$($r.P).trx", '--results-directory', "artifacts/test-results/$($r.P)")
+            if ($r.F) { $cmd += @('--filter', $r.F) }
+            dotnet @cmd
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
+      - name: Test summary
+        if: always()
+        shell: pwsh
+        run: ./tools/summarize-tests.ps1 -ResultsDir artifacts/test-results -Output artifacts/test-summary.md
+      - name: Package (NuGet + self-contained demo and editor)
+        shell: pwsh
+        run: ./tools/package-release.ps1 -Version $env:VERSION -NoBuild
+      - id: sums
+        name: Record checksum manifest hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash -Algorithm SHA256 artifacts/release/SHA256SUMS).Hash.ToLowerInvariant()
+          "sha256=$h" >> $env:GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: |
+            artifacts/release/**
+            artifacts/test-summary.md
+          if-no-files-found: error
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-results
+          path: artifacts/test-results/**
+          if-no-files-found: warn
+
+  ui-evidence:
+    name: Interactive RetroCap UI test (Tier B)
+    needs: [version, build]
+    # Dedicated, isolated Windows x64 runner with a logged-in interactive desktop (see docs/CI-CD.md).
+    # If it is unavailable the job never starts and the release is not published.
+    runs-on: [self-hosted, windows, x64, windowveil-interactive]
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build UI tests
+        run: dotnet build tests/WindowVeil.UiTests/WindowVeil.UiTests.csproj -c Release "-p:Version=${{ env.VERSION }}"
+      - name: Download and verify RetroCap v1.0
+        id: retrocap
+        shell: pwsh
+        run: |
+          $exe = ./tools/get-retrocap.ps1 | Select-Object -Last 1
+          "exe=$exe" >> $env:GITHUB_OUTPUT
+      - name: Run RetroCap UI tests and capture screenshots
+        shell: pwsh
+        run: ./tools/capture-screenshots.ps1 -RetroCapExe "${{ steps.retrocap.outputs.exe }}" -Version $env:VERSION
+      - name: Verify screenshot evidence
+        shell: pwsh
+        run: ./tools/verify-ui-evidence.ps1 -ExpectedCommit $env:GITHUB_SHA
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-evidence
+          path: |
+            artifacts/screenshots/**
+            artifacts/test-results/**
+          if-no-files-found: error
+
+  publish:
+    name: Tag and publish GitHub Release
+    needs: [version, build, ui-evidence]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-evidence
+          path: evidence
+      - name: Verify artifacts are the ones that were built and tested
+        run: |
+          set -euo pipefail
+          actual=$(sha256sum dist/release/SHA256SUMS | cut -d' ' -f1)
+          [ "$actual" = "${{ needs.build.outputs.sums_sha256 }}" ] || { echo "SHA256SUMS changed since the build job"; exit 1; }
+          (cd dist/release && sha256sum -c SHA256SUMS)
+          commit=$(python3 -c "import json;print(json.load(open('evidence/screenshots/evidence-manifest.json'))['commitSha'])")
+          [ "$commit" = "$GITHUB_SHA" ] || { echo "Evidence is for $commit, not $GITHUB_SHA"; exit 1; }
+          result=$(python3 -c "import json;print(json.load(open('evidence/screenshots/evidence-manifest.json'))['result'])")
+          [ "$result" = "passed" ] || { echo "Evidence result is $result"; exit 1; }
+      - name: Refuse to overwrite an existing tag or release
+        run: |
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then echo "Tag $TAG already exists"; exit 1; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "Release $TAG already exists"; exit 1; fi
+      - name: Release notes
+        run: |
+          bash tools/generate-release-notes.sh "$VERSION" "${{ needs.version.outputs.previous_tag }}" "$GITHUB_REPOSITORY" \
+            dist/test-summary.md evidence/screenshots/evidence-manifest.json > release-notes.md
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Create tag and GitHub Release
+        run: |
+          (cd evidence/screenshots && sha256sum retrocap-*.png >> ../../dist/release/SHA256SUMS.screenshots)
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "WindowVeil $TAG" --notes-file release-notes.md \
+            dist/release/*.nupkg dist/release/*.zip dist/release/SHA256SUMS dist/release/SHA256SUMS.screenshots \
+            evidence/screenshots/retrocap-*.png evidence/screenshots/evidence-manifest.json dist/test-summary.md
+      - name: Publish to NuGet.org (optional)
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        if: env.NUGET_API_KEY != ''
+        run: dotnet nuget push "dist/release/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate

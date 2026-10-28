@@ -1,0 +1,68 @@
+name: Screenshots
+
+# Real before/after screenshots taken on a GitHub-hosted Windows desktop session: the demo target with WindowVeil
+# overlays, and the unmodified RetroCap v1.0 (SHA-256 verified). This is a preview aid for contributors; the release
+# evidence still comes from the dedicated interactive runner (release.yml).
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  screenshots:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: ppocrv6-${{ hashFiles('tools/models.lock.json') }}
+      - shell: pwsh
+        run: ./tools/download-models.ps1
+      - run: dotnet build WindowVeil.sln -c Release
+
+      - name: Display information
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          [System.Windows.Forms.Screen]::AllScreens | Format-List DeviceName, Bounds, Primary
+
+      - name: Demo before/after
+        shell: pwsh
+        run: |
+          $dir = "artifacts/screenshots/demo"
+          $p = Start-Process samples/WindowVeil.Demo/bin/Release/net8.0-windows/WindowVeil.Demo.exe -ArgumentList "--screenshots", (Resolve-Path . | Join-Path -ChildPath $dir) -PassThru -Wait
+          Get-Content "$dir/demo-log.txt"
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+
+      - name: RetroCap scenarios
+        if: always()
+        shell: pwsh
+        env:
+          WINDOWVEIL_KILL_EXISTING_RETROCAP: "1"
+        run: |
+          $exe = ./tools/get-retrocap.ps1 | Select-Object -Last 1
+          dotnet samples/WindowVeil.RetroCapDemo/bin/Release/net8.0-windows/WindowVeil.RetroCapDemo.dll `
+            --retrocap $exe --evidence artifacts/screenshots/retrocap --models models
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: artifacts/screenshots/**
+          if-no-files-found: warn

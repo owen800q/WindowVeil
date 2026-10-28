@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>WindowVeil</RootNamespace>
+    <Description>Platform-independent abstractions for WindowVeil: overlay rules, sessions, locators, placement, appearances and geometry.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="System.IO.Hashing" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowVeil.UnitTests" />
+  </ItemGroup>
+</Project>

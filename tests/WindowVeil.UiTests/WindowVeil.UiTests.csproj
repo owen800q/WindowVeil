@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Desktop UI Automation tests. They launch samples/WindowVeil.DemoTarget and need an interactive Windows desktop.
+    Tests are [Trait("Category", "Desktop")], except the RetroCap scenarios, which are [Trait("Category", "Interactive")].
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- For the UI Automation client assemblies (System.Windows.Automation) used to drive the demo target. -->
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>WindowVeil.UiTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WindowVeil.Core\WindowVeil.Core.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Automation\WindowVeil.Automation.csproj" />
+    <!-- Interactive RetroCap scenarios (Category=Interactive). -->
+    <ProjectReference Include="..\..\samples\WindowVeil.RetroCapDemo\WindowVeil.RetroCapDemo.csproj" />
+    <!-- Built before the tests but not referenced: the tests launch it as a separate process. -->
+    <ProjectReference Include="..\..\samples\WindowVeil.DemoTarget\WindowVeil.DemoTarget.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    Embeds the demo target's output path (same Configuration) as assembly metadata "DemoTargetPath" so the fixture
+    can launch it. The WINDOWVEIL_DEMOTARGET environment variable overrides it at run time.
+  -->
+  <Target Name="EmbedDemoTargetPath" BeforeTargets="GetAssemblyAttributes">
+    <MSBuild Projects="..\..\samples\WindowVeil.DemoTarget\WindowVeil.DemoTarget.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_DemoTargetOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>DemoTargetPath</_Parameter1>
+        <_Parameter2>@(_DemoTargetOutput->'%(FullPath)')</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,0 +1,126 @@
+name: CI
+
+# Tier A validation on GitHub-hosted Windows runners. No release credentials, no self-hosted runners:
+# untrusted pull-request code never reaches the interactive release runner.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main] # early feedback on feature branches; pushes to main are handled by release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+  CI: "true"
+
+jobs:
+  build-test:
+    name: Build and test (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      WINDOWVEIL_OCR_MODELS: ${{ github.workspace }}\models
+      WINDOWVEIL_REQUIRE_OCR_MODELS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache PP-OCRv6 models
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: ppocrv6-${{ hashFiles('tools/models.lock.json') }}
+
+      - name: Download pinned PP-OCRv6 models (SHA-256 verified)
+        shell: pwsh
+        run: ./tools/download-models.ps1
+
+      - name: Restore
+        run: dotnet restore WindowVeil.sln
+
+      - name: Build (Release, analyzers, warnings as errors)
+        run: dotnet build WindowVeil.sln -c Release --no-restore
+
+      - name: Unit tests
+        run: >
+          dotnet test tests/WindowVeil.UnitTests/WindowVeil.UnitTests.csproj -c Release --no-build
+          --logger "trx;LogFileName=unit.trx" --collect "XPlat Code Coverage"
+          --results-directory artifacts/test-results/unit
+
+      - name: OCR fixture tests
+        run: >
+          dotnet test tests/WindowVeil.OcrTests/WindowVeil.OcrTests.csproj -c Release --no-build
+          --logger "trx;LogFileName=ocr.trx" --collect "XPlat Code Coverage"
+          --results-directory artifacts/test-results/ocr
+
+      - name: Desktop integration tests (native, WPF, UI Automation against DemoTarget)
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($p in 'WindowVeil.NativeTests', 'WindowVeil.WpfTests', 'WindowVeil.UiTests') {
+            dotnet test "tests/$p/$p.csproj" -c Release --no-build --filter "Category=Desktop" `
+              --logger "trx;LogFileName=$p.trx" --collect "XPlat Code Coverage" `
+              --results-directory "artifacts/test-results/$p"
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Coverage report
+        if: always()
+        shell: pwsh
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.4.5
+          reportgenerator "-reports:artifacts/test-results/**/coverage.cobertura.xml" "-targetdir:artifacts/coverage" "-reporttypes:MarkdownSummaryGithub;Cobertura" "-assemblyfilters:+WindowVeil.*;-*Tests"
+          if (Test-Path artifacts/coverage/SummaryGithub.md) { Get-Content artifacts/coverage/SummaryGithub.md >> $env:GITHUB_STEP_SUMMARY }
+
+      - name: Pack and validate NuGet packages
+        shell: pwsh
+        run: |
+          $version = "0.0.0-ci.${{ github.run_number }}"
+          dotnet pack WindowVeil.sln -c Release --no-build -o artifacts/packages "-p:Version=$version"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          ./tools/validate-packages.ps1 -PackageDir artifacts/packages -Version $version
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            artifacts/test-results/**/*.trx
+            artifacts/coverage/**
+          if-no-files-found: warn
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics
+          path: |
+            artifacts/**
+            !artifacts/packages/**
+            **/TestResults/**
+          if-no-files-found: ignore
+
+  scripts:
+    name: Release tooling self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test version computation
+        run: bash tools/tests/compute-version.test.sh

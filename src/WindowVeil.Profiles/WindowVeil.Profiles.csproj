@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>WindowVeil.Profiles</RootNamespace>
+    <Description>JSON overlay profiles for WindowVeil: a versioned, validated, untrusted-input-safe file format for overlay rules.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowVeil.Core\WindowVeil.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowVeil.UnitTests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>WindowVeil.Ocr.Paddle</RootNamespace>
+    <Description>On-device OCR for WindowVeil with the official PaddleOCR PP-OCRv6 ONNX models (text detection + recognition) on ONNX Runtime. The pre- and post-processing reproduces the official PaddleOCR/PaddleX pipeline.</Description>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowVeil.Ocr\WindowVeil.Ocr.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowVeil.OcrTests" />
+  </ItemGroup>
+</Project>

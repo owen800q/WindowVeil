@@ -1,0 +1,94 @@
+<Window x:Class="WindowVeil.DemoTarget.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WindowVeil Demo Target"
+        Width="640" Height="520"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        FontFamily="Segoe UI" FontSize="14"
+        Background="White" Foreground="Black"
+        UseLayoutRounding="True">
+    <!-- Every element that tests address has an explicit x:Name (= UI Automation AutomationId). Keep texts stable. -->
+    <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="340" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel x:Name="LeftColumn" Grid.Column="0" Orientation="Vertical">
+            <TextBlock x:Name="AccountBalanceLabel" Text="Account Balance" FontWeight="SemiBold" />
+            <TextBlock x:Name="AccountBalanceValue" Text="$12,345.67" Margin="0,2,0,10" />
+
+            <StackPanel x:Name="ApiKeyRow" Orientation="Horizontal" Margin="0,0,0,12">
+                <TextBlock x:Name="PasswordLabel" Text="API key:" Margin="0,0,6,0" />
+                <TextBlock x:Name="ApiKeyValue" Text="sk-demo-1234567890" />
+            </StackPanel>
+
+            <CheckBox x:Name="StartupCheck" Content="Start automatically when I sign in to Windows" Margin="0,0,0,6" />
+            <CheckBox x:Name="StartMinimizedCheck" Content="Start hidden in the notification area" Margin="0,0,0,6" />
+            <CheckBox x:Name="TelemetryCheck" Content="Send anonymous usage data" Margin="0,0,0,12" />
+
+            <StackPanel x:Name="ApplyRow" Orientation="Horizontal" Margin="0,0,0,12">
+                <!-- Two buttons with the same Name ("Apply") for multiple-match tests. -->
+                <Button x:Name="ApplyButtonA" Content="Apply" Width="90" Height="28" Margin="0,0,8,0" />
+                <Button x:Name="ApplyButtonB" Content="Apply" Width="90" Height="28" />
+            </StackPanel>
+
+            <StackPanel x:Name="ActionRow" Orientation="Horizontal" Margin="0,0,0,8">
+                <Button x:Name="MoveButton" Content="Move label" Width="120" Height="28" Margin="0,0,8,0" Click="OnMoveClick" />
+                <Button x:Name="ToggleVisibilityButton" Content="Toggle label" Width="120" Height="28" Margin="0,0,8,0" Click="OnToggleVisibilityClick" />
+                <!-- Icon-only button: its Name comes from AutomationProperties.Name, there is no text (no TextPattern). -->
+                <Button x:Name="IconButton" AutomationProperties.Name="Upload avatar" Width="28" Height="28">
+                    <Rectangle Width="14" Height="14" Fill="SteelBlue" />
+                </Button>
+            </StackPanel>
+
+            <!-- MovingLabel alternates between Canvas.Left 0 and 40 DIP on each MoveButton click. -->
+            <Canvas x:Name="MovingArea" Height="24" Margin="0,0,0,6">
+                <TextBlock x:Name="MovingLabel" Text="I move" Canvas.Left="0" Canvas.Top="2" />
+            </Canvas>
+
+            <Border Height="24">
+                <TextBlock x:Name="CollapsibleLabel" Text="Now you see me" VerticalAlignment="Center" />
+            </Border>
+
+            <!-- Drop-down items render in a popup outside the ComboBox (and possibly outside the window). -->
+            <ComboBox x:Name="ColorCombo" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" SelectedIndex="0">
+                <ComboBoxItem x:Name="Color1" Content="Color 1" />
+                <ComboBoxItem x:Name="Color2" Content="Color 2" />
+                <ComboBoxItem x:Name="Color3" Content="Color 3" />
+                <ComboBoxItem x:Name="Color4" Content="Color 4" />
+                <ComboBoxItem x:Name="Color5" Content="Color 5" />
+                <ComboBoxItem x:Name="Color6" Content="Color 6" />
+                <ComboBoxItem x:Name="Color7" Content="Color 7" />
+                <ComboBoxItem x:Name="Color8" Content="Color 8" />
+            </ComboBox>
+        </StackPanel>
+
+        <StackPanel x:Name="RightColumn" Grid.Column="2" Orientation="Vertical">
+            <!-- Text is set in code-behind (CR/LF line breaks; the second "secret token" spans two lines). -->
+            <TextBox x:Name="NotesBox"
+                     Height="124"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="NoWrap"
+                     HorizontalScrollBarVisibility="Hidden"
+                     VerticalScrollBarVisibility="Hidden"
+                     Margin="0,0,0,8" />
+
+            <RichTextBox x:Name="DocumentBox" Height="64" IsReadOnly="True" Margin="0,0,0,8"
+                         VerticalScrollBarVisibility="Hidden">
+                <FlowDocument PagePadding="2">
+                    <Paragraph Margin="0">This document is Confidential and for demo use only.</Paragraph>
+                </FlowDocument>
+            </RichTextBox>
+
+            <!-- 40 rows (AutomationIds Row1..Row40) are added in code-behind; only the first few are visible. -->
+            <ScrollViewer x:Name="ScrollArea" Height="160" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
+                          BorderBrush="Gray" BorderThickness="1">
+                <StackPanel x:Name="ScrollRows" Orientation="Vertical" />
+            </ScrollViewer>
+        </StackPanel>
+    </Grid>
+</Window>
