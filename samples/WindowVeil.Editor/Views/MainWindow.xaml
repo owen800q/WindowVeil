@@ -1,0 +1,672 @@
+<Window x:Class="WindowVeil.Editor.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:WindowVeil.Editor.ViewModels"
+        Title="WindowVeil Editor" Width="1520" Height="960" MinWidth="1100" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI" FontSize="12"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/WindowVeil.Editor;component/Themes/EditorStyles.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" MinHeight="300" />
+      <RowDefinition Height="6" />
+      <RowDefinition Height="190" MinHeight="80" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- ===================================================== header -->
+    <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,8">
+      <DockPanel LastChildFill="True">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+          <Border Width="22" Height="22" CornerRadius="5" Background="{StaticResource AccentBrush}" Margin="0,0,8,0">
+            <TextBlock Text="V" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="WindowVeil Editor" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsLivePreview}" Content="Live preview"
+                        ToolTip="Show every rule on the target window (StartAsync / ResumeAsync); off suspends the session (SuspendAsync)." />
+          <Button Content="Detach" Command="{Binding DetachCommand}" Margin="0" ToolTip="Dispose the preview session and remove its overlays" />
+        </StackPanel>
+        <StackPanel Orientation="Vertical" Margin="24,0,12,0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding TargetText}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" />
+          <TextBlock Style="{StaticResource Muted}">
+            <Run Text="Preview session:" /> <Run Text="{Binding SessionStateText, Mode=OneWay}" />
+          </TextBlock>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- ===================================================== three columns -->
+    <Grid Grid.Row="1" Margin="8,8,8,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="370" MinWidth="280" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="*" MinWidth="380" />
+        <ColumnDefinition Width="6" />
+        <ColumnDefinition Width="430" MinWidth="320" />
+      </Grid.ColumnDefinitions>
+
+      <!-- ================================================= left: target, picker, hierarchy -->
+      <Grid Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" MinHeight="160" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource Card}">
+          <StackPanel>
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Refresh" Command="{Binding RefreshProcessesCommand}" />
+              <TextBlock Text="Processes" Style="{StaticResource CardTitle}" />
+            </DockPanel>
+            <TextBox Text="{Binding ProcessFilter, UpdateSourceTrigger=PropertyChanged}" ToolTip="Filter by process name or main window title" />
+            <ListBox ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess}" Height="96"
+                     ToolTip="Select a process to filter the window list; select it again with Ctrl to clear.">
+              <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:ProcessItem}">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Display}" FontWeight="SemiBold" Margin="0,0,6,0" />
+                    <TextBlock Text="{Binding MainWindowTitle}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <DockPanel Margin="0,8,0,0">
+              <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Refresh" Command="{Binding RefreshWindowsCommand}" />
+              <TextBlock Text="Windows" Style="{StaticResource CardTitle}" />
+            </DockPanel>
+            <ListView ItemsSource="{Binding Windows}" SelectedItem="{Binding SelectedWindow}" Height="150"
+                      ToolTip="Selecting a window attaches the live preview session (WindowSelector.ByHandle)">
+              <ListView.View>
+                <GridView>
+                  <GridViewColumn Header="HWND" Width="78" DisplayMemberBinding="{Binding HandleText}" />
+                  <GridViewColumn Header="Process" Width="90" DisplayMemberBinding="{Binding ProcessText}" />
+                  <GridViewColumn Header="Title" Width="130" DisplayMemberBinding="{Binding Title}" />
+                  <GridViewColumn Header="Bounds" Width="150" DisplayMemberBinding="{Binding BoundsText}" />
+                </GridView>
+              </ListView.View>
+            </ListView>
+          </StackPanel>
+        </Border>
+
+        <!-- crosshair picker -->
+        <Border Grid.Row="1" Style="{StaticResource Card}">
+          <DockPanel>
+            <Border x:Name="PickerTarget" DockPanel.Dock="Left" Width="64" Height="64" CornerRadius="6" Margin="0,0,10,0"
+                    Background="{StaticResource AccentSoftBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1"
+                    Cursor="Cross" ToolTip="Drag me onto an element of another application"
+                    MouseLeftButtonDown="OnPickerMouseDown" MouseMove="OnPickerMouseMove" MouseLeftButtonUp="OnPickerMouseUp"
+                    LostMouseCapture="OnPickerLostCapture">
+              <Canvas Width="40" Height="40">
+                <Ellipse Width="28" Height="28" Canvas.Left="6" Canvas.Top="6" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" />
+                <Line X1="20" Y1="0" X2="20" Y2="16" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" />
+                <Line X1="20" Y1="24" X2="20" Y2="40" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" />
+                <Line X1="0" Y1="20" X2="16" Y2="20" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" />
+                <Line X1="24" Y1="20" X2="40" Y2="20" Stroke="{StaticResource AccentBrush}" StrokeThickness="2" />
+              </Canvas>
+            </Border>
+            <StackPanel>
+              <TextBlock Text="Element picker" Style="{StaticResource CardTitle}" />
+              <TextBlock Text="{Binding HoverText}" TextWrapping="Wrap" />
+              <TextBlock Text="Picking…" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"
+                         Visibility="{Binding IsPicking, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+          </DockPanel>
+        </Border>
+
+        <!-- hierarchy -->
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+          <DockPanel>
+            <DockPanel DockPanel.Dock="Top">
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Style="{StaticResource SmallButton}" Content="Reveal picked element" Command="{Binding RevealPickedCommand}" />
+                <Button Style="{StaticResource SmallButton}" Content="Reload" Command="{Binding ReloadTreeCommand}" />
+              </StackPanel>
+              <TextBlock Text="Element hierarchy" Style="{StaticResource CardTitle}" />
+            </DockPanel>
+            <!-- Not virtualized: "Reveal" selects nodes through their view models, which needs generated containers. -->
+            <TreeView x:Name="HierarchyTree" ItemsSource="{Binding TreeRoots}" SelectedItemChanged="OnTreeSelectedItemChanged">
+              <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem">
+                  <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                  <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                  <EventSetter Event="Selected" Handler="OnTreeItemSelected" />
+                </Style>
+              </TreeView.ItemContainerStyle>
+              <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate DataType="{x:Type vm:ElementNodeViewModel}" ItemsSource="{Binding Children}">
+                  <TextBlock Text="{Binding Header}" />
+                </HierarchicalDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
+          </DockPanel>
+        </Border>
+      </Grid>
+
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" ResizeBehavior="PreviousAndNext" />
+
+      <!-- ================================================= middle: inspector + designer -->
+      <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel>
+          <!-- inspector -->
+          <Border Style="{StaticResource Card}">
+            <StackPanel>
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                  <Button Style="{StaticResource SmallButton}" Content="Highlight" Command="{Binding HighlightInspectedCommand}" />
+                  <Button Style="{StaticResource SmallButton}" Content="Refresh" Command="{Binding RefreshInspectedCommand}" />
+                </StackPanel>
+                <TextBlock Text="UI Automation inspector" Style="{StaticResource CardTitle}" />
+              </DockPanel>
+              <TextBlock Text="Pick an element or select a node in the hierarchy." Foreground="{StaticResource MutedTextBrush}">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding HasInspected}" Value="True">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+              <Grid Visibility="{Binding HasInspected, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="120" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Style="{StaticResource FieldLabel}" Text="HWND" />
+                <TextBox Grid.Row="0" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedHandleText, Mode=OneWay}" />
+                <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Process" />
+                <TextBox Grid.Row="1" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedProcessText, Mode=OneWay}" />
+                <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="ControlType" />
+                <TextBox Grid.Row="2" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedElement.ControlType, Mode=OneWay}" />
+                <TextBlock Grid.Row="3" Style="{StaticResource FieldLabel}" Text="Name" />
+                <TextBox Grid.Row="3" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedElement.Name, Mode=OneWay}" />
+                <TextBlock Grid.Row="4" Style="{StaticResource FieldLabel}" Text="AutomationId" />
+                <TextBox Grid.Row="4" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedElement.AutomationId, Mode=OneWay}" />
+                <TextBlock Grid.Row="5" Style="{StaticResource FieldLabel}" Text="ClassName" />
+                <TextBox Grid.Row="5" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedElement.ClassName, Mode=OneWay}" />
+                <TextBlock Grid.Row="6" Style="{StaticResource FieldLabel}" Text="FrameworkId" />
+                <TextBox Grid.Row="6" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedElement.FrameworkId, Mode=OneWay}" />
+                <TextBlock Grid.Row="7" Style="{StaticResource FieldLabel}" Text="Bounds" />
+                <TextBox Grid.Row="7" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedBoundsText, Mode=OneWay}" />
+                <TextBlock Grid.Row="8" Style="{StaticResource FieldLabel}" Text="State" />
+                <TextBox Grid.Row="8" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedStateText, Mode=OneWay}" />
+                <TextBlock Grid.Row="9" Style="{StaticResource FieldLabel}" Text="RuntimeId" />
+                <TextBox Grid.Row="9" Grid.Column="1" Style="{StaticResource Value}" Text="{Binding InspectedElement.RuntimeId, Mode=OneWay}" />
+              </Grid>
+              <TextBlock Text="SUGGESTED LOCATORS (most robust first)" Style="{StaticResource SectionTitle}"
+                         Visibility="{Binding HasInspected, Converter={StaticResource BoolToVisibility}}" />
+              <ItemsControl ItemsSource="{Binding Suggestions}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type vm:SuggestionItem}">
+                    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,4">
+                      <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SmallButton}" Content="Use as target"
+                                Command="{Binding UseCommand}" CommandParameter="{Binding}" VerticalAlignment="Center" />
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding Rank}" Width="18" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+                        <StackPanel>
+                          <TextBlock Text="{Binding Category}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" />
+                        </StackPanel>
+                      </DockPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <!-- rule designer -->
+          <Border Style="{StaticResource Card}" DataContext="{Binding Designer}">
+            <StackPanel>
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding EditingText}" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="Rule designer" Style="{StaticResource CardTitle}" />
+              </DockPanel>
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Id" />
+                <TextBox Grid.Column="1" Text="{Binding RuleId, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,4" />
+                <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Name" />
+                <TextBox Grid.Column="3" Text="{Binding RuleName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Group" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Group, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,4" />
+              </Grid>
+
+              <!-- locator -->
+              <TextBlock Text="TARGET (LOCATOR)" Style="{StaticResource SectionTitle}" />
+              <ComboBox ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.LocatorModes}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                        SelectedValue="{Binding LocatorMode}" />
+
+              <Grid Visibility="{Binding IsUiaMode, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="100" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="AutomationId" />
+                <TextBox Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding AutomationId, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Name" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ElementName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,4" />
+                <ComboBox Grid.Row="1" Grid.Column="2" Width="96" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.TextMatches}}"
+                          SelectedValuePath="Value" DisplayMemberPath="Label" SelectedValue="{Binding NameMatch}" Margin="0,0,6,4" />
+                <CheckBox Grid.Row="1" Grid.Column="3" Content="Ignore case" IsChecked="{Binding NameIgnoreCase}" Margin="0,0,0,4" />
+                <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="ControlType" />
+                <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding ControlType, UpdateSourceTrigger=PropertyChanged}" ToolTip="Programmatic name, e.g. Button, CheckBox, Edit" />
+                <TextBlock Grid.Row="3" Style="{StaticResource FieldLabel}" Text="ClassName" />
+                <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding ClassName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="4" Style="{StaticResource FieldLabel}" Text="Match index" />
+                <TextBox Grid.Row="4" Grid.Column="1" Width="60" HorizontalAlignment="Left" Text="{Binding IndexText, UpdateSourceTrigger=PropertyChanged}" ToolTip="0 = first match in tree order" />
+              </Grid>
+
+              <Grid Visibility="{Binding IsTextMode, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="100" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Text" />
+                <TextBox Grid.Column="1" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,6,4" />
+                <ComboBox Grid.Column="2" Width="96" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.TextMatches}}"
+                          SelectedValuePath="Value" DisplayMemberPath="Label" SelectedValue="{Binding TextMatch}" Margin="0,0,6,4" />
+                <CheckBox Grid.Column="3" Content="Ignore case" IsChecked="{Binding TextIgnoreCase}" Margin="0,0,0,4" />
+                <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Within #" />
+                <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding TextScopeAutomationId, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="Optional AutomationId of the element to search in (empty = whole window)" />
+              </Grid>
+
+              <TextBlock Text="{Binding ExistingLocatorText}" TextWrapping="Wrap" Foreground="{StaticResource WarningBrush}"
+                         Visibility="{Binding IsExistingMode, Converter={StaticResource BoolToVisibility}}" Margin="0,2,0,4" />
+
+              <CheckBox Content="Fall back to a rectangle when the element is not found" IsChecked="{Binding RectangleFallback}"
+                        Visibility="{Binding ShowFallbackOption, Converter={StaticResource BoolToVisibility}}" />
+
+              <StackPanel Visibility="{Binding ShowRectangle, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Style="{StaticResource FieldLabel}" Text="X" />
+                  <TextBox Grid.Column="1" Text="{Binding RectX}" Margin="0,0,8,4" />
+                  <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Y" />
+                  <TextBox Grid.Column="3" Text="{Binding RectY}" Margin="0,0,8,4" />
+                  <TextBlock Grid.Column="4" Style="{StaticResource FieldLabel}" Text="W" />
+                  <TextBox Grid.Column="5" Text="{Binding RectWidth}" Margin="0,0,8,4" />
+                  <TextBlock Grid.Column="6" Style="{StaticResource FieldLabel}" Text="H" />
+                  <TextBox Grid.Column="7" Text="{Binding RectHeight}" />
+                </Grid>
+                <DockPanel>
+                  <TextBlock Style="{StaticResource FieldLabel}" Text="Relative to" />
+                  <ComboBox Width="140" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.Anchors}}"
+                            SelectedValuePath="Value" DisplayMemberPath="Label" SelectedValue="{Binding Anchor}" HorizontalAlignment="Left" />
+                  <TextBlock Style="{StaticResource Muted}" Text="physical pixels" VerticalAlignment="Center" Margin="8,0,0,4" />
+                </DockPanel>
+              </StackPanel>
+
+              <WrapPanel Margin="0,4,0,0" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                <Button Content="Draw rectangle…" Command="{Binding DrawRectangleCommand}" ToolTip="Drag a rectangle over the target window (stored as WindowRelative in physical pixels)" />
+                <Button Content="Test locator" Command="{Binding TestLocatorCommand}" ToolTip="Resolve the locator once (engine.ResolveAsync) and highlight the result" />
+              </WrapPanel>
+
+              <!-- appearance -->
+              <TextBlock Text="APPEARANCE" Style="{StaticResource SectionTitle}" />
+              <ComboBox ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.AppearanceTypes}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                        SelectedValue="{Binding AppearanceType}" />
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="100" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Color" Visibility="{Binding ShowColor, Converter={StaticResource BoolToVisibility}}" />
+                <DockPanel Grid.Column="1" Visibility="{Binding ShowColor, Converter={StaticResource BoolToVisibility}}">
+                  <Border DockPanel.Dock="Left" Width="22" Height="22" CornerRadius="3" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,0,6,4">
+                    <Border.Background>
+                      <SolidColorBrush Color="{Binding ColorPreview}" />
+                    </Border.Background>
+                  </Border>
+                  <TextBlock DockPanel.Dock="Right" Text="invalid color" Foreground="{StaticResource ErrorBrush}" VerticalAlignment="Center" Margin="6,0,0,4">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsColorValid}" Value="False">
+                            <Setter Property="Visibility" Value="Visible" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
+                  <TextBox Text="{Binding ColorText, UpdateSourceTrigger=PropertyChanged}" ToolTip="#RGB, #RRGGBB or #AARRGGBB" />
+                </DockPanel>
+
+                <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Opacity" Visibility="{Binding ShowOpacity, Converter={StaticResource BoolToVisibility}}" />
+                <DockPanel Grid.Row="1" Grid.Column="1" Visibility="{Binding ShowOpacity, Converter={StaticResource BoolToVisibility}}">
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding OpacityText}" Width="44" VerticalAlignment="Center" Margin="0,0,0,4" />
+                  <Slider Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" TickFrequency="0.05" IsSnapToTickEnabled="True" Value="{Binding Opacity}" />
+                </DockPanel>
+
+                <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="Thickness" Visibility="{Binding ShowThickness, Converter={StaticResource BoolToVisibility}}" />
+                <DockPanel Grid.Row="2" Grid.Column="1" Visibility="{Binding ShowThickness, Converter={StaticResource BoolToVisibility}}">
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding Thickness, StringFormat='{}{0:0.#} DIP'}" Width="44" VerticalAlignment="Center" Margin="0,0,0,4" />
+                  <Slider Minimum="1" Maximum="12" SmallChange="0.5" TickFrequency="0.5" IsSnapToTickEnabled="True" Value="{Binding Thickness}" />
+                </DockPanel>
+
+                <TextBlock Grid.Row="3" Style="{StaticResource FieldLabel}" Text="Scope" Visibility="{Binding ShowSpotlightScope, Converter={StaticResource BoolToVisibility}}" />
+                <ComboBox Grid.Row="3" Grid.Column="1" Visibility="{Binding ShowSpotlightScope, Converter={StaticResource BoolToVisibility}}"
+                          ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.SpotlightScopes}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding SpotlightScope}" />
+
+                <TextBlock Grid.Row="4" Style="{StaticResource FieldLabel}" Text="Gallery item" Visibility="{Binding ShowGalleryChoice, Converter={StaticResource BoolToVisibility}}" />
+                <ComboBox Grid.Row="4" Grid.Column="1" Visibility="{Binding ShowGalleryChoice, Converter={StaticResource BoolToVisibility}}"
+                          ItemsSource="{Binding GalleryEntries}" SelectedValuePath="Id" DisplayMemberPath="DisplayName" SelectedValue="{Binding FactoryId}" />
+
+                <TextBlock Grid.Row="5" Style="{StaticResource FieldLabel}" Text="Factory id" Visibility="{Binding ShowFactoryId, Converter={StaticResource BoolToVisibility}}" />
+                <ComboBox Grid.Row="5" Grid.Column="1" Visibility="{Binding ShowFactoryId, Converter={StaticResource BoolToVisibility}}" IsEditable="True"
+                          ItemsSource="{Binding RegisteredIdList}" Text="{Binding FactoryId, UpdateSourceTrigger=PropertyChanged}"
+                          ToolTip="An id registered in engine.Appearances (AppearanceRegistry). Exported as { &quot;type&quot;: &quot;registered&quot;, &quot;factory&quot;: id }." />
+              </Grid>
+
+              <!-- placement -->
+              <TextBlock Text="PLACEMENT" Style="{StaticResource SectionTitle}" />
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="100" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Mode" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.PlacementModes}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding PlacementMode}" Margin="0,0,10,4" />
+                <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Multi-line" />
+                <ComboBox Grid.Column="3" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.MultiRectModes}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding MultiRect}" />
+                <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Offset X (DIP)" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding OffsetX}" Margin="0,0,10,4" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Offset Y" />
+                <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding OffsetY}" />
+                <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="Padding (DIP)" />
+                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding PaddingText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,4"
+                         ToolTip="One value, two (horizontal, vertical) or four (left, top, right, bottom)" />
+                <TextBlock Grid.Row="2" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Alignment" Visibility="{Binding ShowAlignment, Converter={StaticResource BoolToVisibility}}" />
+                <ComboBox Grid.Row="2" Grid.Column="3" Visibility="{Binding ShowAlignment, Converter={StaticResource BoolToVisibility}}"
+                          ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.Alignments}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding Alignment}" />
+                <TextBlock Grid.Row="3" Style="{StaticResource FieldLabel}" Text="Width (DIP)" Visibility="{Binding ShowSize, Converter={StaticResource BoolToVisibility}}" />
+                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding WidthText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,4"
+                         Visibility="{Binding ShowSize, Converter={StaticResource BoolToVisibility}}" ToolTip="Empty = the content's desired size" />
+                <TextBlock Grid.Row="3" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Height" Visibility="{Binding ShowSize, Converter={StaticResource BoolToVisibility}}" />
+                <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding HeightText, UpdateSourceTrigger=PropertyChanged}"
+                         Visibility="{Binding ShowSize, Converter={StaticResource BoolToVisibility}}" ToolTip="Empty = the content's desired size" />
+              </Grid>
+
+              <!-- behavior -->
+              <TextBlock Text="INPUT AND BEHAVIOR" Style="{StaticResource SectionTitle}" />
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="100" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Input" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.InputModes}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding InputMode}" />
+                <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Focus" Visibility="{Binding ShowFocusPolicy, Converter={StaticResource BoolToVisibility}}" />
+                <ComboBox Grid.Row="1" Grid.Column="1" Visibility="{Binding ShowFocusPolicy, Converter={StaticResource BoolToVisibility}}"
+                          ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.FocusPolicies}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding FocusPolicy}" />
+                <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="Z-order" />
+                <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.ZOrders}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding ZOrder}" />
+                <TextBlock Grid.Row="3" Style="{StaticResource FieldLabel}" Text="Visible" />
+                <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding Source={x:Static vm:RuleDesignerViewModel.Visibilities}}" SelectedValuePath="Value" DisplayMemberPath="Label"
+                          SelectedValue="{Binding Visibility}" />
+                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                  <CheckBox Content="Follow the target" IsChecked="{Binding FollowTarget}" />
+                  <TextBlock Style="{StaticResource FieldLabel}" Text="Priority" Margin="12,0,6,4" />
+                  <TextBox Width="50" Text="{Binding Priority}" />
+                </StackPanel>
+              </Grid>
+
+              <!-- result -->
+              <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="4" Padding="8,6" Margin="0,8,0,6"
+                      Visibility="{Binding IsValid, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding PreviewText}" TextWrapping="Wrap" />
+              </Border>
+              <Border Background="{StaticResource ErrorSoftBrush}" CornerRadius="4" Padding="8,6" Margin="0,8,0,6">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding IsValid}" Value="True">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding ValidationText}" TextWrapping="Wrap" Foreground="{StaticResource ErrorBrush}" />
+              </Border>
+              <WrapPanel DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                <Button Style="{StaticResource PrimaryButton}" Content="Add rule" Command="{Binding AddRuleCommand}" />
+                <Button Content="Update selected rule" Command="{Binding UpdateRuleCommand}" />
+                <Button Content="New rule" Command="{Binding NewRuleCommand}" />
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+
+      <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" ResizeBehavior="PreviousAndNext" />
+
+      <!-- ================================================= right: rules, profile, gallery -->
+      <Grid Grid.Column="4">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" MinHeight="180" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" MinHeight="160" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource Card}">
+          <DockPanel>
+            <DockPanel DockPanel.Dock="Top">
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Style="{StaticResource SmallButton}" Content="Duplicate" Command="{Binding DuplicateRuleCommand}" />
+                <Button Style="{StaticResource SmallButton}" Content="Remove" Command="{Binding RemoveRuleCommand}" />
+              </StackPanel>
+              <TextBlock Text="Rules" Style="{StaticResource CardTitle}" />
+            </DockPanel>
+            <ListView ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}">
+              <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                  <Setter Property="ToolTip" Value="{Binding Message}" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsProblem}" Value="True">
+                      <Setter Property="Background" Value="{StaticResource ErrorSoftBrush}" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </ListView.ItemContainerStyle>
+              <ListView.View>
+                <GridView>
+                  <GridViewColumn Header="On" Width="34">
+                    <GridViewColumn.CellTemplate>
+                      <DataTemplate DataType="{x:Type vm:RuleItemViewModel}">
+                        <CheckBox IsChecked="{Binding IsEnabled}" Margin="0" ToolTip="session.EnableRule / DisableRule" />
+                      </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                  </GridViewColumn>
+                  <GridViewColumn Header="Rule" Width="120" DisplayMemberBinding="{Binding DisplayName}" />
+                  <GridViewColumn Header="Locator" Width="150">
+                    <GridViewColumn.CellTemplate>
+                      <DataTemplate DataType="{x:Type vm:RuleItemViewModel}">
+                        <TextBlock Text="{Binding LocatorCategory}" ToolTip="{Binding LocatorSummary}" />
+                      </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                  </GridViewColumn>
+                  <GridViewColumn Header="Appearance" Width="130" DisplayMemberBinding="{Binding AppearanceSummary}" />
+                  <GridViewColumn Header="State" Width="80">
+                    <GridViewColumn.CellTemplate>
+                      <DataTemplate DataType="{x:Type vm:RuleItemViewModel}">
+                        <TextBlock Text="{Binding State}" FontWeight="SemiBold">
+                          <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding State}" Value="Active">
+                                  <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsProblem}" Value="True">
+                                  <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </TextBlock.Style>
+                        </TextBlock>
+                      </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                  </GridViewColumn>
+                  <GridViewColumn Header="Resolved by" Width="110" DisplayMemberBinding="{Binding ResolvedBy}" />
+                  <GridViewColumn Header="Overlay bounds" Width="150" DisplayMemberBinding="{Binding BoundsText}" />
+                  <GridViewColumn Header="Message" Width="220" DisplayMemberBinding="{Binding Message}" />
+                </GridView>
+              </ListView.View>
+            </ListView>
+          </DockPanel>
+        </Border>
+
+        <!-- profile -->
+        <Border Grid.Row="1" Style="{StaticResource Card}">
+          <StackPanel>
+            <TextBlock Text="JSON profile" Style="{StaticResource CardTitle}" />
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+              <TextBlock Style="{StaticResource FieldLabel}" Text="Name" />
+              <TextBox Grid.Column="1" Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,4" />
+              <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Process" />
+              <TextBox Grid.Column="3" Text="{Binding ProfileProcessName, UpdateSourceTrigger=PropertyChanged}" ToolTip="application.processName (derived from the target window)" />
+              <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="Title has" />
+              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ProfileTitleContains, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,10,4" ToolTip="Optional application.titleContains" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="Class" />
+              <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding ProfileClassName, UpdateSourceTrigger=PropertyChanged}" ToolTip="Optional application.className" />
+            </Grid>
+            <WrapPanel Margin="0,4,0,0">
+              <Button Content="Import…" Command="{Binding ImportCommand}" />
+              <Button Style="{StaticResource PrimaryButton}" Content="Export…" Command="{Binding ExportCommand}" />
+            </WrapPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- gallery -->
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="Appearance gallery" Style="{StaticResource CardTitle}" />
+            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" Margin="0,0,0,6"
+                       Text="Live previews. WPF items are registered in engine.Appearances and referenced by id, so rules using them export to JSON." />
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <ItemsControl ItemsSource="{Binding Gallery}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type vm:GalleryItemViewModel}">
+                    <Border Width="190" Margin="0,0,8,8" Padding="8" CornerRadius="6" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="#FAFAFB">
+                      <StackPanel>
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding KindText}" FontSize="10" Foreground="{StaticResource MutedTextBrush}" />
+                        <Border Height="70" Margin="0,6" CornerRadius="4" Background="#E5E7EB" ClipToBounds="True">
+                          <ContentControl Content="{Binding Preview}" HorizontalAlignment="Center" VerticalAlignment="Center" Focusable="False" IsTabStop="False">
+                            <ContentControl.Resources>
+                              <!-- Show WPF previews with default control styles, as they look in the overlay. -->
+                              <Style TargetType="Button" />
+                            </ContentControl.Resources>
+                          </ContentControl>
+                        </Border>
+                        <TextBlock Text="{Binding Description}" Style="{StaticResource Muted}" FontSize="11" Height="30" />
+                        <Button Style="{StaticResource SmallButton}" Content="Use in designer" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                Command="{Binding UseCommand}" CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <GridSplitter Grid.Row="2" Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeBehavior="PreviousAndNext" ResizeDirection="Rows" />
+
+    <!-- ===================================================== diagnostics -->
+    <Border Grid.Row="3" Margin="8,0,8,0" CornerRadius="6" Background="{StaticResource LogBackgroundBrush}" Padding="8,6">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <Button Style="{StaticResource SmallButton}" Content="Copy" Command="{Binding CopyLogCommand}" />
+            <Button Style="{StaticResource SmallButton}" Content="Clear" Command="{Binding ClearLogCommand}" />
+          </StackPanel>
+          <TextBlock Text="Diagnostics" Foreground="{StaticResource LogTextBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+        <ListBox x:Name="LogList" ItemsSource="{Binding Log.Entries}" Background="Transparent" BorderThickness="0"
+                 FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock TextWrapping="Wrap">
+                <Run Text="{Binding Time, Mode=OneWay}" Foreground="#9CA3AF" />
+                <Run Text="{Binding LevelText, Mode=OneWay}">
+                  <Run.Style>
+                    <Style TargetType="Run">
+                      <Setter Property="Foreground" Value="#60A5FA" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Level}" Value="Warning">
+                          <Setter Property="Foreground" Value="#FBBF24" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Level}" Value="Error">
+                          <Setter Property="Foreground" Value="#F87171" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Run.Style>
+                </Run>
+                <Run Text="{Binding Path=Source, Mode=OneWay, StringFormat='[{0}]'}" Foreground="#A78BFA" />
+                <Run Text="{Binding Message, Mode=OneWay}" Foreground="#E5E7EB" />
+              </TextBlock>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- ===================================================== status bar -->
+    <Border Grid.Row="4" Padding="12,4" Margin="0,6,0,0" Background="#FFFFFF" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+      <TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedTextBrush}" />
+    </Border>
+  </Grid>
+</Window>
