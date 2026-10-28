@@ -587,7 +587,8 @@ public sealed class OverlaySession : IAsyncDisposable
                 if (contentWork) e.NeedsResolve = true;
             }
         }
-        await RenderAsync(entries, fresh, ct).ConfigureAwait(false);
+        // Z-order/foreground changes do not alter frames, but overlays must be re-stacked above the target.
+        await RenderAsync(entries, fresh, ct, restack: (work & Work.ZOrder) != 0).ConfigureAwait(false);
 
         // Phase B: re-resolve where needed, then render again.
         if (!fresh.IsPresentable) return;
@@ -668,7 +669,7 @@ public sealed class OverlaySession : IAsyncDisposable
         }
     }
 
-    private async Task RenderAsync(RuleEntry[] entries, TargetWindowInfo window, CancellationToken ct)
+    private async Task RenderAsync(RuleEntry[] entries, TargetWindowInfo window, CancellationToken ct, bool restack = false)
     {
         var batches = new Dictionary<IOverlayRenderer, List<OverlayVisualUpdate>>();
         var statusChanges = new List<RuleStatus>();
@@ -756,7 +757,7 @@ public sealed class OverlaySession : IAsyncDisposable
                 }
             }
 
-            if (visual is not null && !frame.IsEquivalentTo(visual.CurrentFrame) &&
+            if (visual is not null && (!frame.IsEquivalentTo(visual.CurrentFrame) || (restack && frame.Visible)) &&
                 !(frame.Visible == false && (visual.CurrentFrame is null || !visual.CurrentFrame.Visible)))
             {
                 if (!batches.TryGetValue(e.Renderer, out var list)) batches[e.Renderer] = list = [];
@@ -835,6 +836,7 @@ public sealed class OverlaySession : IAsyncDisposable
     {
         var candidates = _engine.WindowSystem.EnumerateWindows()
             .Where(w => !OverlayWindowRegistry.IsOverlay(w.Handle))
+            .Where(w => _engine.WindowSystem.IsProcessAlive(w.ProcessId)) // a dying process can leave its window listed briefly
             .ToArray();
         var found = Selector.SelectBest(candidates);
         if (found is null) return false;

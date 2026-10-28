@@ -31,7 +31,10 @@ public enum WindowEventKind
     ZOrderChanged,
 }
 
-/// <summary>A window notification. Delivered on an arbitrary thread; handlers must be fast and non-blocking.</summary>
+/// <summary>
+/// A window notification. Delivered on an arbitrary thread; handlers must be fast and non-blocking.
+/// <see cref="TimestampTicks"/> is a <see cref="System.Diagnostics.Stopwatch.GetTimestamp"/> value (monotonic, not wall-clock).
+/// </summary>
 public readonly record struct WindowEvent(WindowEventKind Kind, nint Handle, long TimestampTicks);
 
 /// <summary>
