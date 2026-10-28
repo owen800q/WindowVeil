@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>WindowVeil.Wpf</RootNamespace>
+    <!-- Required by the LibraryImport source generator used for the internal P/Invokes. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>WPF overlay renderer for WindowVeil: hosts arbitrary WPF UIElements (controls, user controls, data binding, commands, animations) as overlays on top of external application windows.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowVeil.Core\WindowVeil.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowVeil.WpfTests" />
+  </ItemGroup>
+</Project>
