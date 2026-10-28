@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 
-namespace WindowVeil.Native;
+using WindowVeil.Native;
+
+namespace WindowVeil;
 
 /// <summary><see cref="WindowVeilBuilder"/> extensions for the Win32 backend.</summary>
 public static class NativeWindowVeilBuilderExtensions

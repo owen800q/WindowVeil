@@ -8,6 +8,8 @@
   <ItemGroup>
     <ProjectReference Include="..\WindowVeil.Core\WindowVeil.Core.csproj" />
     <ProjectReference Include="..\WindowVeil.Native\WindowVeil.Native.csproj" />
+    <ProjectReference Include="..\WindowVeil.Automation\WindowVeil.Automation.csproj" />
+    <ProjectReference Include="..\WindowVeil.Capture\WindowVeil.Capture.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="WindowVeil.NativeTests" />

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 
-namespace WindowVeil.Wpf;
+using WindowVeil.Wpf;
+
+namespace WindowVeil;
 
 /// <summary>Registers the WPF renderer with a <see cref="WindowVeilBuilder"/>.</summary>
 public static class WpfWindowVeilBuilderExtensions

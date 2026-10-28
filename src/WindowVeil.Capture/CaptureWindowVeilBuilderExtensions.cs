@@ -1,4 +1,6 @@
-namespace WindowVeil.Capture;
+using WindowVeil.Capture;
+
+namespace WindowVeil;
 
 /// <summary><see cref="WindowVeilBuilder"/> extensions for screen capture.</summary>
 public static class CaptureWindowVeilBuilderExtensions

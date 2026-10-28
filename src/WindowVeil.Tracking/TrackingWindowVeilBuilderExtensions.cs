@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
 using WindowVeil.Native;
 
-namespace WindowVeil.Tracking;
+using WindowVeil.Tracking;
+
+namespace WindowVeil;
 
 /// <summary><see cref="WindowVeilBuilder"/> extensions for window tracking.</summary>
 public static class TrackingWindowVeilBuilderExtensions
