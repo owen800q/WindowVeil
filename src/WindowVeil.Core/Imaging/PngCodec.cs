@@ -13,6 +13,12 @@ public static class PngCodec
 {
     private static readonly byte[] Signature = [137, 80, 78, 71, 13, 10, 26, 10];
 
+    /// <summary>Largest accepted width or height. Larger headers are rejected before any buffer is allocated.</summary>
+    public const int MaxDimension = 32768;
+
+    /// <summary>Largest accepted pixel count (64 Mpx, a 256 MiB BGRA buffer).</summary>
+    public const long MaxPixels = 1L << 26;
+
     /// <summary>Encodes an image as a 32-bit RGBA PNG.</summary>
     public static byte[] Encode(BgraImage image)
     {
@@ -71,12 +77,13 @@ public static class PngCodec
         while (pos + 8 <= data.Length)
         {
             int len = BinaryPrimitives.ReadInt32BigEndian(data[pos..]);
-            if (len < 0 || pos + 12 + len > data.Length) throw new InvalidDataException("Truncated PNG chunk.");
+            if (len < 0 || pos + 12L + len > data.Length) throw new InvalidDataException("Truncated PNG chunk.");
             var type = System.Text.Encoding.ASCII.GetString(data.Slice(pos + 4, 4));
             var body = data.Slice(pos + 8, len);
             switch (type)
             {
                 case "IHDR":
+                    if (len < 13) throw new InvalidDataException("PNG IHDR chunk is too short.");
                     width = BinaryPrimitives.ReadInt32BigEndian(body);
                     height = BinaryPrimitives.ReadInt32BigEndian(body[4..]);
                     bitDepth = body[8]; colorType = body[9]; interlace = body[12];
@@ -89,6 +96,8 @@ public static class PngCodec
             if (type == "IEND") break;
         }
         if (width <= 0 || height <= 0) throw new InvalidDataException("PNG has no valid IHDR chunk.");
+        if (width > MaxDimension || height > MaxDimension || (long)width * height > MaxPixels)
+            throw new InvalidDataException($"PNG dimensions {width}x{height} exceed the supported maximum ({MaxDimension} per side, {MaxPixels} pixels).");
         if (bitDepth != 8) throw new InvalidDataException($"Unsupported PNG bit depth {bitDepth}; only 8-bit images are supported.");
         if (interlace != 0) throw new InvalidDataException("Interlaced PNGs are not supported.");
         int channels = colorType switch { 0 => 1, 2 => 3, 3 => 1, 4 => 2, 6 => 4, _ => throw new InvalidDataException($"Unsupported PNG color type {colorType}.") };

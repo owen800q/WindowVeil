@@ -126,6 +126,14 @@ public sealed record TextQuery
 
     /// <inheritdoc />
     public override string ToString() => $"{Mode}{(IgnoreCase ? "(i)" : "")}:\"{Pattern}\"";
+
+    /// <summary>Value equality over the query definition (the cached compiled regex is not part of it).</summary>
+    public bool Equals(TextQuery? other) =>
+        other is not null && Pattern == other.Pattern && Mode == other.Mode && IgnoreCase == other.IgnoreCase &&
+        NormalizeWhitespace == other.NormalizeWhitespace;
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(Pattern, Mode, IgnoreCase, NormalizeWhitespace);
 }
 
 /// <summary>A character range within a string.</summary>

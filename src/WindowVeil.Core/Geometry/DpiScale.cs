@@ -9,7 +9,7 @@ public readonly record struct DpiScale
     /// <summary>Creates a scale from a raw DPI value (96 = 100%).</summary>
     public DpiScale(double dpi)
     {
-        if (double.IsNaN(dpi) || dpi <= 0) throw new ArgumentOutOfRangeException(nameof(dpi), dpi, "DPI must be positive.");
+        if (!double.IsFinite(dpi) || dpi <= 0) throw new ArgumentOutOfRangeException(nameof(dpi), dpi, "DPI must be positive and finite.");
         Dpi = dpi;
     }
 
