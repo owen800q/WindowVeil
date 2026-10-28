@@ -90,36 +90,62 @@ internal static class UiaHelpers
         return !result.IsEmpty;
     }
 
+    private static readonly ControlType[] PopupHosts =
+    [
+        ControlType.ComboBox, ControlType.Menu, ControlType.MenuBar, ControlType.MenuItem, ControlType.SplitButton, ControlType.ToolTip,
+    ];
+
     /// <summary>
     /// Clips an element rectangle to what is actually visible: the bounds of every ancestor that scrolls (supports
     /// ScrollPattern) and the target window. WPF keeps <c>IsOffscreen</c> false for items scrolled out of a
-    /// <c>ScrollViewer</c> and reports their virtual position, so without this an overlay would be drawn outside
-    /// the viewport (or over unrelated content). Returns an empty rectangle when nothing is visible.
+    /// <c>ScrollViewer</c> and reports their virtual position, so without this an overlay would be drawn outside the
+    /// viewport (or over unrelated content). Returns an empty rectangle when nothing is visible.
+    /// <para>
+    /// Items of drop-downs, menus and tool tips render in separate popup windows that can extend beyond both their host
+    /// control and the target window. When the walk reaches such a popup host (or a nested window), clipping stops there:
+    /// only scrolling ancestors inside the popup apply, and the target window bounds are not used.
+    /// </para>
+    /// <para>
+    /// The ancestors are read with a cache request (one cross-process round trip per level) and the walk stops at the
+    /// target window, so the cost is proportional to the element's depth below the window.
+    /// </para>
     /// </summary>
-    public static PixelRect ClipToVisible(AutomationElement element, PixelRect bounds, PixelRect windowBounds, int maxAncestors = 32)
+    public static PixelRect ClipToVisible(AutomationElement element, PixelRect bounds, nint targetWindow, PixelRect windowBounds, int maxAncestors = 32)
     {
-        var visible = windowBounds.IsEmpty ? bounds : bounds.Intersect(windowBounds);
-        if (visible.IsEmpty) return PixelRect.Empty;
+        var visible = bounds;
+        bool inPopup = false;
         try
         {
+            var request = new CacheRequest { TreeFilter = UiaAutomation.ControlViewCondition };
+            request.Add(AutomationElement.IsScrollPatternAvailableProperty);
+            request.Add(AutomationElement.BoundingRectangleProperty);
+            request.Add(AutomationElement.ControlTypeProperty);
+            request.Add(AutomationElement.NativeWindowHandleProperty);
             var walker = TreeWalker.ControlViewWalker;
-            var current = walker.GetParent(element);
+            var current = walker.GetParent(element, request);
             for (int i = 0; current is not null && i < maxAncestors; i++)
             {
-                if (current == AutomationElement.RootElement) break;
-                if (current.GetCurrentPropertyValue(AutomationElement.IsScrollPatternAvailableProperty) is true &&
-                    TryToPixelRect(current.Current.BoundingRectangle, out var viewport))
+                var c = current.Cached;
+                if (c.NativeWindowHandle != 0 && c.NativeWindowHandle == targetWindow) break; // reached the target window
+                if (Array.IndexOf(PopupHosts, c.ControlType) >= 0 || c.ControlType == ControlType.Window)
+                {
+                    inPopup = true; // the element lives in a popup (or nested window) owned by this ancestor
+                    break;
+                }
+                if (current.GetCachedPropertyValue(AutomationElement.IsScrollPatternAvailableProperty) is true &&
+                    TryToPixelRect(c.BoundingRectangle, out var viewport))
                 {
                     visible = visible.Intersect(viewport);
                     if (visible.IsEmpty) return PixelRect.Empty;
                 }
-                current = walker.GetParent(current);
+                current = walker.GetParent(current, request);
             }
         }
         catch (Exception ex) when (IsStale(ex))
         {
             // The ancestor chain changed while walking it; keep what was established so far.
         }
+        if (!inPopup && !windowBounds.IsEmpty) visible = visible.Intersect(windowBounds);
         return visible;
     }
 

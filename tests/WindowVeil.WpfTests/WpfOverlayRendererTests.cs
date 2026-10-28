@@ -314,6 +314,38 @@ public sealed class WpfOverlayRendererTests : IAsyncLifetime
         Assert.True(boundSize!.Value.Width > 60, $"bound text measured {boundSize}");
     }
 
+    [Fact]
+    public async Task MeasureAsync_completes_on_a_thread_pool_thread_not_the_dispatcher()
+    {
+        await using var visual = await _renderer.CreateVisualAsync(Request(WpfAppearance.Create(() => new Button { Content = "x", Width = 40, Height = 20 })));
+
+        // ExecuteSynchronously runs the continuation on whichever thread completed the task.
+        bool completedOnDispatcher = await visual.MeasureAsync(DpiScale.Default).AsTask()
+            .ContinueWith(_ => _renderer.Dispatcher.CheckAccess(), TaskContinuationOptions.ExecuteSynchronously);
+
+        Assert.False(completedOnDispatcher, "the session loop must never continue on the WPF dispatcher thread");
+    }
+
+    [Fact]
+    public async Task MeasureAsync_falls_back_when_the_dispatcher_never_goes_idle()
+    {
+        await using var visual = await _renderer.CreateVisualAsync(Request(WpfAppearance.Create(() => new Button { Content = "x", Width = 40, Height = 20 })));
+        var dispatcher = _renderer.Dispatcher;
+        var stop = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+        void Busy()
+        {
+            Thread.Sleep(2);
+            if (DateTime.UtcNow < stop) dispatcher.BeginInvoke(Busy, System.Windows.Threading.DispatcherPriority.Background);
+        }
+        await dispatcher.InvokeAsync(() => dispatcher.BeginInvoke(Busy, System.Windows.Threading.DispatcherPriority.Background));
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var size = await visual.MeasureAsync(DpiScale.Default);
+
+        Assert.Equal(new PixelSize(40, 20), size);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2), $"measure took {watch.Elapsed} while the dispatcher was busy");
+    }
+
     private sealed class BoundModel
     {
         public string Label { get; } = "Masked by policy";

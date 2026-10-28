@@ -70,6 +70,9 @@ public static class RetroCapScenarioRunner
     /// </summary>
     public const string LegacyNeighborCheckId = "HideCheck";
 
+    /// <summary>Label of <see cref="StartupCheckId"/> in RetroCap v1.0 (later builds use <see cref="StartupText"/>).</summary>
+    public const string LegacyStartupText = "Start with Windows";
+
     /// <summary>The label of the hidden checkbox.</summary>
     public const string StartupText = "Start automatically when I sign in to Windows";
 
@@ -202,12 +205,15 @@ public static class RetroCapScenarioRunner
             var w = Target();
             var t = await _engine.ResolveAsync(w, ElementLocator.ByAutomationId(StartupCheckId), ct);
             var n = await _engine.ResolveAsync(w, ElementLocator.ByAutomationId(NeighborCheckId), ct);
-            if (!n.IsResolved)
+            // Fall back to the v1.0 neighbor only when StartMinimizedCheck does not exist. Any other failure (offscreen,
+            // UI Automation unavailable, error) is reported against StartMinimizedCheck instead of silently switching controls.
+            if (n.Status == LocatorStatus.NotFound)
             {
                 _neighborId = LegacyNeighborCheckId;
+                manifest.RetroCap["neighborFallback"] = $"{NeighborCheckId} not found ({n.Message}); using {LegacyNeighborCheckId} (RetroCap v1.0 layout)";
                 n = await _engine.ResolveAsync(w, ElementLocator.ByAutomationId(_neighborId), ct);
             }
-            _startupText = await ReadNameAsync(StartupCheckId) ?? StartupText;
+            _startupText = await ReadNameAsync(StartupCheckId) ?? (_neighborId == LegacyNeighborCheckId ? LegacyStartupText : StartupText);
             _neighborText = await ReadNameAsync(_neighborId) ?? NeighborText;
             manifest.RetroCap["startupLabel"] = _startupText;
             manifest.RetroCap["neighbor"] = $"{_neighborId}: {_neighborText}";

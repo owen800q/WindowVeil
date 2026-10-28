@@ -20,7 +20,7 @@ internal static class TextSearch
     public sealed record Result(LocatorStatus Status, IReadOnlyList<PixelRect> Bounds, string Message, double Confidence);
 
     public static Result Find(AutomationElement scope, TextLocator locator, UiAutomationOptions options, CacheRequest request,
-        IReadOnlySet<nint>? overlays, CancellationToken ct, PixelRect windowBounds = default)
+        IReadOnlySet<nint>? overlays, CancellationToken ct, nint targetWindow = 0, PixelRect windowBounds = default)
     {
         var query = locator.Query;
         var nameCandidates = new List<AutomationElement>();
@@ -58,7 +58,7 @@ internal static class TextSearch
                 // never reported at its virtual position. Offscreen elements have no geometry at all.
                 var cached = element.Cached;
                 if (cached.IsOffscreen || !UiaHelpers.TryToPixelRect(cached.BoundingRectangle, out var clip) ||
-                    (clip = UiaHelpers.ClipToVisible(element, clip, windowBounds)).IsEmpty)
+                    (clip = UiaHelpers.ClipToVisible(element, clip, targetWindow, windowBounds)).IsEmpty)
                 {
                     matchesWithoutGeometry += matches.Count;
                     continue;
@@ -102,7 +102,7 @@ internal static class TextSearch
         {
             var c = element.Cached;
             if (c.IsOffscreen || !UiaHelpers.TryToPixelRect(c.BoundingRectangle, out var r) ||
-                (r = UiaHelpers.ClipToVisible(element, r, windowBounds)).IsEmpty) { offscreenNames++; continue; }
+                (r = UiaHelpers.ClipToVisible(element, r, targetWindow, windowBounds)).IsEmpty) { offscreenNames++; continue; }
             rects.Add(r);
             if (!locator.AllMatches) break;
         }

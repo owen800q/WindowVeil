@@ -80,6 +80,20 @@ public sealed class DemoTargetFixture : IAsyncLifetime
         ((ScrollPattern)element.GetCurrentPattern(ScrollPattern.Pattern)).SetScrollPercent(ScrollPattern.NoScroll, verticalPercent);
     });
 
+    /// <summary>The raw UI Automation bounding rectangle (no WindowVeil clipping), rounded outward.</summary>
+    public Task<PixelRect> RawBoundsAsync(string automationId) => Uia.InvokeAsync(_ =>
+    {
+        var r = Find(automationId).Current.BoundingRectangle;
+        return r.IsEmpty ? PixelRect.Empty : PixelRect.FromRectDOutward(new RectD(r.X, r.Y, r.Width, r.Height));
+    });
+
+    /// <summary>Expands or collapses an element through ExpandCollapsePattern.</summary>
+    public Task SetExpandedAsync(string automationId, bool expanded) => Uia.InvokeAsync(_ =>
+    {
+        var p = (ExpandCollapsePattern)Find(automationId).GetCurrentPattern(ExpandCollapsePattern.Pattern);
+        if (expanded) p.Expand(); else p.Collapse();
+    });
+
     private AutomationElement Find(string automationId)
     {
         var root = AutomationElement.FromHandle(Handle);

@@ -169,21 +169,13 @@ public sealed class WpfOverlayRenderer : IOverlayRenderer
 
     // ------------------------------------------------------------------ measure
 
+    /// <summary>How long a measurement waits for the dispatcher to go idle before measuring at Normal priority.</summary>
+    internal static readonly TimeSpan IdleMeasureTimeout = TimeSpan.FromMilliseconds(250);
+
     internal async ValueTask<PixelSize?> MeasureAsync(WpfOverlayVisual visual, DpiScale dpi, CancellationToken cancellationToken)
     {
         if (visual.IsDisposed || !visual.Appearance.SizeToContent) return null;
-        // Bindings (DataBind priority) and Loaded handlers queued while the content was created must run first,
-        // otherwise e.g. a TextBlock bound to a view model measures as empty. A ContextIdle no-op runs after them.
-        try
-        {
-            await GetDispatcher().InvokeAsync(static () => { }, System.Windows.Threading.DispatcherPriority.ContextIdle)
-                .Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // Dispatcher shut down; the measure call below reports the failure consistently.
-        }
-        return await DispatcherInvoke.RunAsync(GetDispatcher(), () =>
+        PixelSize? Measure()
         {
             if (visual.IsDisposed) return (PixelSize?)null;
             var content = visual.Content;
@@ -194,7 +186,22 @@ public sealed class WpfOverlayRenderer : IOverlayRenderer
             visual.Root.InvalidateMeasure();
             if (desired.Width <= 0 && desired.Height <= 0) return null;
             return new PixelSize(ToPhysical(desired.Width, dpi.Scale), ToPhysical(desired.Height, dpi.Scale));
-        }, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Bindings (DataBind priority) and Loaded handlers queued while the content was created must run first, otherwise
+        // a TextBlock bound to a view model measures as empty. Measuring at ContextIdle runs after them. A dispatcher that
+        // never goes idle (for example a busy application UI thread) must not stall the session, so after a short wait the
+        // measurement falls back to Normal priority. DispatcherInvoke completes asynchronously, never on the UI thread.
+        using var idle = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        idle.CancelAfter(IdleMeasureTimeout);
+        try
+        {
+            return await DispatcherInvoke.RunAsync(GetDispatcher(), Measure, idle.Token, DispatcherPriority.ContextIdle).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return await DispatcherInvoke.RunAsync(GetDispatcher(), Measure, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private static int ToPhysical(double dip, double scale)

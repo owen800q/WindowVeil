@@ -18,7 +18,14 @@ public partial class App : Application
         if (Arg("--screenshots") is { } dir)
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            int code = await ScreenshotTour.RunAsync(dir);
+            int code;
+            try { code = await ScreenshotTour.RunAsync(dir); }
+            catch (Exception ex)
+            {
+                // async void: never let an exception escape and crash the process without an exit code.
+                Console.Error.WriteLine(ex);
+                code = 1;
+            }
             Shutdown(code);
             return;
         }

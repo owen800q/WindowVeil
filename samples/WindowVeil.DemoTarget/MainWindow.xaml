@@ -52,6 +52,18 @@
             <Border Height="24">
                 <TextBlock x:Name="CollapsibleLabel" Text="Now you see me" VerticalAlignment="Center" />
             </Border>
+
+            <!-- Drop-down items render in a popup outside the ComboBox (and possibly outside the window). -->
+            <ComboBox x:Name="ColorCombo" Width="160" HorizontalAlignment="Left" Margin="0,6,0,0" SelectedIndex="0">
+                <ComboBoxItem x:Name="Color1" Content="Color 1" />
+                <ComboBoxItem x:Name="Color2" Content="Color 2" />
+                <ComboBoxItem x:Name="Color3" Content="Color 3" />
+                <ComboBoxItem x:Name="Color4" Content="Color 4" />
+                <ComboBoxItem x:Name="Color5" Content="Color 5" />
+                <ComboBoxItem x:Name="Color6" Content="Color 6" />
+                <ComboBoxItem x:Name="Color7" Content="Color 7" />
+                <ComboBoxItem x:Name="Color8" Content="Color 8" />
+            </ComboBox>
         </StackPanel>
 
         <StackPanel x:Name="RightColumn" Grid.Column="2" Orientation="Vertical">

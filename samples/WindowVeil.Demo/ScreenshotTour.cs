@@ -33,7 +33,8 @@ internal static class ScreenshotTour
         {
             target = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--demo-target --left 40 --top 40") { UseShellExecute = false })!;
             await using var engine = WindowVeilEngine.CreateBuilder().UseWindowsDesktop().UseWpfOverlays().Build();
-            var session = await engine.AttachAsync(WindowSelector.ByTitle(TargetTitle), new SessionOptions { AttachTimeout = TimeSpan.FromSeconds(30) });
+            // Attach to the process just started, not to any window whose title happens to match (an interactive demo may be open).
+            var session = await engine.AttachAsync(WindowSelector.ByProcessId(target.Id).WithTitle(TargetTitle), new SessionOptions { AttachTimeout = TimeSpan.FromSeconds(30) });
             var hwnd = session.Target!.Handle;
             await Task.Delay(1500); // first WPF render of the target
             var window = engine.WindowSystem.GetWindow(hwnd)!;
@@ -49,7 +50,7 @@ internal static class ScreenshotTour
             var ocr = scenarios.Where(s => s.RequiresOcr).Select(s => s.Id).ToHashSet();
             foreach (var s in scenarios.Where(s => s.Id != "apply-spotlight" && !ocr.Contains(s.Id))) session.AddRule(s.CreateRule());
             await session.StartAsync();
-            await WaitActiveAsync(session, Log);
+            if (!await WaitActiveAsync(session, Log)) return Fail("Not every overlay became Active; refusing to save an 'after' screenshot.");
             var after = await StableCaptureAsync(region);
             PngCodec.Save(after, Path.Combine(outputDir, "demo-after.png"));
 
@@ -57,7 +58,7 @@ internal static class ScreenshotTour
             session.AddRule(scenarios.First(s => s.Id == "apply-spotlight").CreateRule());
             session.AddRule(scenarios.First(s => s.Id == "startup-highlight").CreateRule());
             await session.RefreshAsync();
-            await WaitActiveAsync(session, Log);
+            if (!await WaitActiveAsync(session, Log)) return Fail("The spotlight scenario did not become Active.");
             var spot = await StableCaptureAsync(region);
             PngCodec.Save(spot, Path.Combine(outputDir, "demo-spotlight.png"));
 
@@ -68,28 +69,39 @@ internal static class ScreenshotTour
             Compose(before, after, "Before: the demo target as its own process", "After: the same window with WindowVeil overlays",
                 Path.Combine(outputDir, "demo-comparison.png"));
             Log($"Live overlay windows after disposal: {OverlayWindowRegistry.Count}");
-            return 0;
+            return OverlayWindowRegistry.Count == 0 ? 0 : Fail("Overlay windows leaked after the session was disposed.");
         }
         catch (Exception ex)
         {
-            Log("FAILED: " + ex);
-            PngCodec.Save(DesktopScreenshot.CaptureVirtualScreen(), Path.Combine(outputDir, "demo-failure.png"));
-            return 1;
+            return Fail(ex.ToString());
         }
         finally
         {
-            try { target?.Kill(); } catch (InvalidOperationException) { }
+            // Killing can fail in several ways (already exited, access denied while exiting); the log must still be written.
+            try { if (target is { HasExited: false }) target.Kill(); }
+            catch (Exception ex) { Log("Could not stop the target: " + ex.Message); }
+            target?.Dispose();
             File.WriteAllText(Path.Combine(outputDir, "demo-log.txt"), log.ToString());
+        }
+
+        int Fail(string reason)
+        {
+            Log("FAILED: " + reason);
+            try { PngCodec.Save(DesktopScreenshot.CaptureVirtualScreen(), Path.Combine(outputDir, "demo-failure.png")); }
+            catch (Exception ex) { Log("Could not save the failure screenshot: " + ex.Message); }
+            return 1;
         }
     }
 
-    private static async Task WaitActiveAsync(OverlaySession session, Action<string> log)
+    /// <summary>Waits until every rule is Active; returns false (after logging every status) if any is not.</summary>
+    private static async Task<bool> WaitActiveAsync(OverlaySession session, Action<string> log)
     {
         var sw = Stopwatch.StartNew();
-        while (sw.Elapsed < TimeSpan.FromSeconds(20) &&
-               session.RuleStatuses.Any(s => s.State is RuleState.Pending)) await Task.Delay(100);
+        while (sw.Elapsed < TimeSpan.FromSeconds(20) && session.RuleStatuses.Any(s => s.State != RuleState.Active)) await Task.Delay(100);
         await Task.Delay(500);
-        foreach (var s in session.RuleStatuses) log("  " + s);
+        var statuses = session.RuleStatuses;
+        foreach (var s in statuses) log("  " + s);
+        return statuses.Count > 0 && statuses.All(s => s.State == RuleState.Active);
     }
 
     private static async Task<BgraImage> StableCaptureAsync(PixelRect region)

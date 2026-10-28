@@ -197,7 +197,7 @@ public sealed class UiAutomationLocatorResolver : ILocatorResolver, IDisposable
             return LocatorResolution.Failed(locator, LocatorStatus.Offscreen,
                 $"Element {locator} exists but is not on screen: {why} (collapsed, scrolled out of view or hidden).") with { State = state };
         }
-        var visible = UiaHelpers.ClipToVisible(element, bounds, context.Window.Bounds);
+        var visible = UiaHelpers.ClipToVisible(element, bounds, context.Window.Handle, context.Window.Bounds);
         if (visible.IsEmpty)
             return LocatorResolution.Failed(locator, LocatorStatus.Offscreen,
                 $"Element {locator} exists but is scrolled out of view (its rectangle {bounds} is outside every scrolling ancestor or the window).") with { State = state };
@@ -224,7 +224,7 @@ public sealed class UiAutomationLocatorResolver : ILocatorResolver, IDisposable
         }
 
         TextSearch.Result result;
-        try { result = TextSearch.Find(scope, locator, Options, request, Overlays(context), ct, context.Window.Bounds); }
+        try { result = TextSearch.Find(scope, locator, Options, request, Overlays(context), ct, context.Window.Handle, context.Window.Bounds); }
         catch (ElementNotAvailableException ex) { return UnavailableFor(locator, context.Window, ex); }
 
         if (result.Status == LocatorStatus.Resolved)

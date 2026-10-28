@@ -56,7 +56,7 @@ internal static class Program
         session.AddRule(MaskRule.Create(
             ElementLocator.ByAutomationId(RetroCapScenarioRunner.StartupCheckId)
                 .Or(ElementLocator.ByName(RetroCapScenarioRunner.StartupText))
-                .Or(ElementLocator.ByName("Start with Windows")), // label used by RetroCap v1.0
+                .Or(ElementLocator.ByName(RetroCapScenarioRunner.LegacyStartupText)),
             MaskAppearance.Solid("#202020"), id: "startup"));
         await session.StartAsync();
         Console.WriteLine($"Native mask: {session.GetRuleStatus("startup")}");
