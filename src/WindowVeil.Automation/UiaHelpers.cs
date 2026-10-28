@@ -90,6 +90,39 @@ internal static class UiaHelpers
         return !result.IsEmpty;
     }
 
+    /// <summary>
+    /// Clips an element rectangle to what is actually visible: the bounds of every ancestor that scrolls (supports
+    /// ScrollPattern) and the target window. WPF keeps <c>IsOffscreen</c> false for items scrolled out of a
+    /// <c>ScrollViewer</c> and reports their virtual position, so without this an overlay would be drawn outside
+    /// the viewport (or over unrelated content). Returns an empty rectangle when nothing is visible.
+    /// </summary>
+    public static PixelRect ClipToVisible(AutomationElement element, PixelRect bounds, PixelRect windowBounds, int maxAncestors = 32)
+    {
+        var visible = windowBounds.IsEmpty ? bounds : bounds.Intersect(windowBounds);
+        if (visible.IsEmpty) return PixelRect.Empty;
+        try
+        {
+            var walker = TreeWalker.ControlViewWalker;
+            var current = walker.GetParent(element);
+            for (int i = 0; current is not null && i < maxAncestors; i++)
+            {
+                if (current == AutomationElement.RootElement) break;
+                if (current.GetCurrentPropertyValue(AutomationElement.IsScrollPatternAvailableProperty) is true &&
+                    TryToPixelRect(current.Current.BoundingRectangle, out var viewport))
+                {
+                    visible = visible.Intersect(viewport);
+                    if (visible.IsEmpty) return PixelRect.Empty;
+                }
+                current = walker.GetParent(current);
+            }
+        }
+        catch (Exception ex) when (IsStale(ex))
+        {
+            // The ancestor chain changed while walking it; keep what was established so far.
+        }
+        return visible;
+    }
+
     /// <summary>The programmatic name of a control type without the <c>ControlType.</c> prefix (e.g. <c>CheckBox</c>).</summary>
     public static string ControlTypeName(ControlType? controlType)
     {

@@ -20,7 +20,7 @@ internal static class TextSearch
     public sealed record Result(LocatorStatus Status, IReadOnlyList<PixelRect> Bounds, string Message, double Confidence);
 
     public static Result Find(AutomationElement scope, TextLocator locator, UiAutomationOptions options, CacheRequest request,
-        IReadOnlySet<nint>? overlays, CancellationToken ct)
+        IReadOnlySet<nint>? overlays, CancellationToken ct, PixelRect windowBounds = default)
     {
         var query = locator.Query;
         var nameCandidates = new List<AutomationElement>();
@@ -57,7 +57,8 @@ internal static class TextSearch
                 // Line rectangles are clipped to the element's (visible) bounds so text scrolled out of a viewport is
                 // never reported at its virtual position. Offscreen elements have no geometry at all.
                 var cached = element.Cached;
-                if (cached.IsOffscreen || !UiaHelpers.TryToPixelRect(cached.BoundingRectangle, out var clip))
+                if (cached.IsOffscreen || !UiaHelpers.TryToPixelRect(cached.BoundingRectangle, out var clip) ||
+                    (clip = UiaHelpers.ClipToVisible(element, clip, windowBounds)).IsEmpty)
                 {
                     matchesWithoutGeometry += matches.Count;
                     continue;
@@ -100,7 +101,8 @@ internal static class TextSearch
         foreach (var element in nameCandidates)
         {
             var c = element.Cached;
-            if (c.IsOffscreen || !UiaHelpers.TryToPixelRect(c.BoundingRectangle, out var r)) { offscreenNames++; continue; }
+            if (c.IsOffscreen || !UiaHelpers.TryToPixelRect(c.BoundingRectangle, out var r) ||
+                (r = UiaHelpers.ClipToVisible(element, r, windowBounds)).IsEmpty) { offscreenNames++; continue; }
             rects.Add(r);
             if (!locator.AllMatches) break;
         }
