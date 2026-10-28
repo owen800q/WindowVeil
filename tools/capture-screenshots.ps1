@@ -24,6 +24,10 @@ if (-not (Test-Path $RetroCapExe)) { throw "RetroCap.exe not found: $RetroCapExe
 if (Test-Path $EvidenceDir) { Remove-Item $EvidenceDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
 
+# PP-OCRv6 models for Demo C (required in the release run).
+& (Join-Path $PSScriptRoot 'download-models.ps1')
+$env:WINDOWVEIL_OCR_MODELS = Join-Path $root 'models'
+
 $env:WINDOWVEIL_RETROCAP_EXE = $RetroCapExe
 $env:WINDOWVEIL_EVIDENCE_DIR = $EvidenceDir
 $env:WINDOWVEIL_REQUIRE_INTERACTIVE = '1'
