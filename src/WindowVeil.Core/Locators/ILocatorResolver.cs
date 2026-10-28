@@ -42,6 +42,9 @@ public sealed class LocatorContext
     /// <summary>Why resolution is happening.</summary>
     public ResolveReason Reason { get; }
 
+    /// <summary>Id of the rule being resolved, or null for one-off resolutions (inspectors, tests).</summary>
+    public string? RuleId { get; init; }
+
     /// <summary>The previous resolution of the same rule and locator, if any (for caching and stale-element reuse).</summary>
     public LocatorResolution? Previous { get; init; }
 

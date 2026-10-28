@@ -61,7 +61,7 @@ public sealed class LocatorPipeline
                 ? context
                 : new LocatorContext(context.Window, context.Reason)
                 {
-                    Capture = context.Capture, Logger = context.Logger, OverlayWindows = context.OverlayWindows, Time = context.Time,
+                    Capture = context.Capture, Logger = context.Logger, OverlayWindows = context.OverlayWindows, Time = context.Time, RuleId = context.RuleId,
                     Previous = previous?.Attempts.FirstOrDefault(a => Equals(a.ResolvedBy, candidate)),
                 };
             var result = await ResolveAsync(candidate, ctx, ct).ConfigureAwait(false);

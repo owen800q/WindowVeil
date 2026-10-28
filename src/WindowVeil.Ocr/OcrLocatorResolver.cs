@@ -101,7 +101,7 @@ public sealed class OcrLocatorResolver : ILocatorResolver, IDisposable
         }
 
         // 2. Newest request wins for this window + locator.
-        var key = new RequestKey(window.Handle, ocr);
+        var key = new RequestKey(window.Handle, context.RuleId, ocr);
         var request = new Request();
         _latest.AddOrUpdate(key, request, (_, old) => { old.Supersede(); return request; });
         try
@@ -349,7 +349,8 @@ public sealed class OcrLocatorResolver : ILocatorResolver, IDisposable
         _cache.Clear();
     }
 
-    private readonly record struct RequestKey(nint Window, OcrTextLocator Locator);
+    // Keyed per rule when the session supplies a rule id, so two rules with equal locators do not supersede each other.
+    private readonly record struct RequestKey(nint Window, string? RuleId, OcrTextLocator Locator);
 
     private readonly record struct CacheKey(ulong Hash, int Width, int Height, OcrOptions Options);
 

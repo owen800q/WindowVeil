@@ -63,6 +63,12 @@ public sealed record OverlayRule
     /// <summary>Visibility policy.</summary>
     public OverlayVisibility Visibility { get; init; } = OverlayVisibility.WhenTargetVisible;
 
+    /// <summary>
+    /// Upper bound for one resolution of this rule. When null, <see cref="SessionOptions.ResolveTimeout"/> applies, or
+    /// <see cref="SessionOptions.OcrResolveTimeout"/> when the locator uses OCR.
+    /// </summary>
+    public TimeSpan? ResolveTimeout { get; init; }
+
     /// <summary>Validates the rule and throws <see cref="WindowVeilException"/> with <see cref="WindowVeilErrorCode.InvalidRule"/>.</summary>
     public void Validate()
     {
@@ -76,6 +82,8 @@ public sealed record OverlayRule
             throw new WindowVeilException(WindowVeilErrorCode.InvalidRule, $"Rule '{Id}' has non-positive UI Automation search bounds.");
         if (Target is OcrTextLocator { MinConfidence: < 0 or > 1 })
             throw new WindowVeilException(WindowVeilErrorCode.InvalidRule, $"Rule '{Id}' has an OCR confidence outside 0..1.");
+        if (ResolveTimeout is { } t && t <= TimeSpan.Zero)
+            throw new WindowVeilException(WindowVeilErrorCode.InvalidRule, $"Rule '{Id}' has a non-positive resolve timeout.");
         if (Placement.Width is <= 0 || Placement.Height is <= 0)
             throw new WindowVeilException(WindowVeilErrorCode.InvalidRule, $"Rule '{Id}' has a non-positive placement size.");
     }

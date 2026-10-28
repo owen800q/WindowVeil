@@ -599,8 +599,10 @@ public sealed class OverlaySession : IAsyncDisposable
             bool needs;
             ElementLocator target;
             LocatorResolution? previous;
+            TimeSpan? ruleTimeout;
             lock (_gate)
             {
+                ruleTimeout = e.Rule.ResolveTimeout;
                 needs = e.Rule.Enabled && e.NeedsResolve && IsCurrent(e) && (e.Rule.FollowTarget || e.Resolution is null || !e.Resolution.IsResolved);
                 target = e.Rule.Target;
                 previous = e.Resolution;
@@ -609,7 +611,7 @@ public sealed class OverlaySession : IAsyncDisposable
             var reason = previous is null
                 ? (reconnected ? ResolveReason.Reconnected : ResolveReason.Initial)
                 : sizeChanged ? ResolveReason.WindowChanged : (work & Work.Poll) != 0 ? ResolveReason.Poll : ResolveReason.ContentChanged;
-            var result = await ResolveAsync(target, previous, fresh, reason, ct).ConfigureAwait(false);
+            var result = await ResolveAsync(e.Rule.Id, target, ruleTimeout, previous, fresh, reason, ct).ConfigureAwait(false);
             lock (_gate)
             {
                 LocatorResolution? discard;
@@ -646,10 +648,12 @@ public sealed class OverlaySession : IAsyncDisposable
         }
     }
 
-    private async Task<LocatorResolution> ResolveAsync(ElementLocator target, LocatorResolution? previous, TargetWindowInfo window, ResolveReason reason, CancellationToken ct)
+    private async Task<LocatorResolution> ResolveAsync(string ruleId, ElementLocator target, TimeSpan? ruleTimeout, LocatorResolution? previous,
+        TargetWindowInfo window, ResolveReason reason, CancellationToken ct)
     {
+        var limit = ruleTimeout ?? (UsesOcr(target) ? Max(Options.ResolveTimeout, Options.OcrResolveTimeout) : Options.ResolveTimeout);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(Options.ResolveTimeout);
+        timeout.CancelAfter(limit);
         var overlays = OverlayWindowRegistry.Snapshot();
         var context = new LocatorContext(window, reason)
         {
@@ -658,6 +662,7 @@ public sealed class OverlaySession : IAsyncDisposable
             Logger = _logger,
             OverlayWindows = overlays,
             Time = _engine.Options.TimeProvider,
+            RuleId = ruleId,
         };
         try
         {
@@ -665,9 +670,14 @@ public sealed class OverlaySession : IAsyncDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return LocatorResolution.Failed(target, LocatorStatus.Error, $"Resolution timed out after {Options.ResolveTimeout}.");
+            return LocatorResolution.Failed(target, LocatorStatus.Error, $"Resolution timed out after {limit}.");
         }
     }
+
+    private static bool UsesOcr(ElementLocator locator) =>
+        locator is OcrTextLocator || (locator is FallbackLocator f && f.Locators.Any(UsesOcr));
+
+    private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
 
     private async Task RenderAsync(RuleEntry[] entries, TargetWindowInfo window, CancellationToken ct, bool restack = false)
     {

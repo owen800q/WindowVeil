@@ -130,6 +130,12 @@ public sealed record SessionOptions
     /// <summary>Upper bound for one locator resolution. Default 5 seconds.</summary>
     public TimeSpan ResolveTimeout { get; init; } = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// Upper bound for resolving rules whose locator uses OCR (recognizing a full-HD window can take seconds on a CPU).
+    /// Default 30 seconds.
+    /// </summary>
+    public TimeSpan OcrResolveTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
     /// <summary>How long <see cref="WindowVeilEngine.AttachAsync(Platform.WindowSelector, SessionOptions?, CancellationToken)"/> waits for a matching window. Default zero (fail immediately).</summary>
     public TimeSpan AttachTimeout { get; init; } = TimeSpan.Zero;
 

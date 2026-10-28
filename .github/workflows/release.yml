@@ -64,7 +64,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: models
-          key: ppocrv6-${{ hashFiles('models.lock.json') }}
+          key: ppocrv6-${{ hashFiles('tools/models.lock.json') }}
       - shell: pwsh
         run: ./tools/download-models.ps1
       - run: dotnet restore WindowVeil.sln

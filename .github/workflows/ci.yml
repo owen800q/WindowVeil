@@ -42,7 +42,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: models
-          key: ppocrv6-${{ hashFiles('models.lock.json') }}
+          key: ppocrv6-${{ hashFiles('tools/models.lock.json') }}
 
       - name: Download pinned PP-OCRv6 models (SHA-256 verified)
         shell: pwsh
