@@ -432,3 +432,6 @@ artifacts/
 dist/
 models/
 *.onnx
+
+# Agent worktrees
+.claude/worktrees/
