@@ -54,7 +54,9 @@ internal static class Program
         var selector = WindowSelector.ByProcessName("RetroCap").WithTitle(RetroCapHost.MainWindowTitle);
         await using var session = await engine.AttachAsync(selector, new SessionOptions { AttachTimeout = TimeSpan.FromSeconds(30) });
         session.AddRule(MaskRule.Create(
-            ElementLocator.Smart(automationId: RetroCapScenarioRunner.StartupCheckId, name: RetroCapScenarioRunner.StartupText),
+            ElementLocator.ByAutomationId(RetroCapScenarioRunner.StartupCheckId)
+                .Or(ElementLocator.ByName(RetroCapScenarioRunner.StartupText))
+                .Or(ElementLocator.ByName("Start with Windows")), // label used by RetroCap v1.0
             MaskAppearance.Solid("#202020"), id: "startup"));
         await session.StartAsync();
         Console.WriteLine($"Native mask: {session.GetRuleStatus("startup")}");

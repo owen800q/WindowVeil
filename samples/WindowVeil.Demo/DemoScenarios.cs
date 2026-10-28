@@ -61,19 +61,20 @@ public static class DemoScenarios
             () => new OverlayRule { Id = "apply-spotlight", Target = ElementLocator.ByName("Apply").WithControlType("Button").At(0), Appearance = SpotlightAppearance.Create(0.55), Placement = OverlayPlacement.Cover(4) }),
         new("notes-secret", "Text range mask: \"secret token\"", "TextPattern ranges inside a TextBox; a match spanning two lines yields two rectangles.",
             () => MaskRule.Create(ElementLocator.ByText("secret token"), MaskAppearance.Transparent("#E53935", 0.9), id: "notes-secret")),
-        new("balance-badge", "WPF badge next to a label", "A WPF control with data binding and animation, placed 12 DIP to the right of the label.",
+        new("balance-badge", "WPF badge next to the API key", "A WPF control with data binding and animation, placed 12 DIP to the right of the API key.",
             () => new OverlayRule
             {
-                Id = "balance-badge", Target = ElementLocator.ByAutomationId("AccountBalanceLabel"),
+                Id = "balance-badge", Target = ElementLocator.ByAutomationId("ApiKeyValue"),
                 Appearance = WpfAppearance.Create(() => new PrivacyBadge("Masked by policy")),
-                Placement = OverlayPlacement.Right(offsetX: 160, offsetY: 0),
+                Placement = OverlayPlacement.Right(offsetX: 12, offsetY: 0),
             }),
         new("toolbar", "Interactive WPF toolbar", "Clickable WPF buttons added to the external window. Clicks are handled by the demo, not forwarded.",
             () => new OverlayRule
             {
                 Id = "toolbar", Target = ElementLocator.Window(WindowAnchor.Client),
                 Appearance = WpfAppearance.Create(() => new FloatingToolbar(toolbarCommands)),
-                Placement = new OverlayPlacement { Mode = PlacementMode.Above, Alignment = PlacementAlignment.End, OffsetX = -8, OffsetY = 44, MultiRect = MultiRectMode.Union },
+                // Bottom-left corner inside the client area: "below" the client rectangle, pulled back up by 52 DIP.
+                Placement = new OverlayPlacement { Mode = PlacementMode.Below, Alignment = PlacementAlignment.Start, OffsetX = 12, OffsetY = -52, MultiRect = MultiRectMode.Union },
                 InputMode = OverlayInputMode.Interactive,
             }),
         new("ocr-balance", "OCR mask: \"$12,345.67\"", "PP-OCRv6 finds the amount in a capture of the window (no UI Automation).",

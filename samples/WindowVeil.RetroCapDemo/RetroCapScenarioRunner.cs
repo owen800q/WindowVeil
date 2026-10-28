@@ -64,6 +64,12 @@ public static class RetroCapScenarioRunner
     /// <summary>The neighbor that must stay visible.</summary>
     public const string NeighborCheckId = "StartMinimizedCheck";
 
+    /// <summary>
+    /// Neighbor used by RetroCap v1.0, which has no <see cref="NeighborCheckId"/> checkbox: "Hide this window while capturing",
+    /// directly above <see cref="StartupCheckId"/>.
+    /// </summary>
+    public const string LegacyNeighborCheckId = "HideCheck";
+
     /// <summary>The label of the hidden checkbox.</summary>
     public const string StartupText = "Start automatically when I sign in to Windows";
 
@@ -119,6 +125,10 @@ public static class RetroCapScenarioRunner
         private PixelRect _screen;
         private BgraImage? _before, _nativeShot;
         private PixelRect _t0, _n0, _window0;
+
+        // Read from the live UI: RetroCap v1.0 labels the checkbox "Start with Windows" and has no StartMinimizedCheck,
+        // while later builds use the longer label and add the neighbor below it.
+        private string _startupText = StartupText, _neighborId = NeighborCheckId, _neighborText = NeighborText;
         private string? _toggle0;
         private readonly HashSet<nint> _overlayHandles = [];
 
@@ -192,15 +202,24 @@ public static class RetroCapScenarioRunner
             var w = Target();
             var t = await _engine.ResolveAsync(w, ElementLocator.ByAutomationId(StartupCheckId), ct);
             var n = await _engine.ResolveAsync(w, ElementLocator.ByAutomationId(NeighborCheckId), ct);
-            r.Check("StartupCheck found by AutomationId", t.IsResolved, $"{t.Status} {t.UnionBounds} {t.Message}");
-            r.Check("StartMinimizedCheck found by AutomationId", n.IsResolved, $"{n.Status} {n.UnionBounds}");
+            if (!n.IsResolved)
+            {
+                _neighborId = LegacyNeighborCheckId;
+                n = await _engine.ResolveAsync(w, ElementLocator.ByAutomationId(_neighborId), ct);
+            }
+            _startupText = await ReadNameAsync(StartupCheckId) ?? StartupText;
+            _neighborText = await ReadNameAsync(_neighborId) ?? NeighborText;
+            manifest.RetroCap["startupLabel"] = _startupText;
+            manifest.RetroCap["neighbor"] = $"{_neighborId}: {_neighborText}";
+            r.Check("StartupCheck found by AutomationId", t.IsResolved, $"{t.Status} {t.UnionBounds} label \"{_startupText}\" {t.Message}");
+            r.Check($"Neighbor {_neighborId} found by AutomationId", n.IsResolved, $"{n.Status} {n.UnionBounds} label \"{_neighborText}\"");
             if (!t.IsResolved || !n.IsResolved) return;
             _t0 = t.UnionBounds; _n0 = n.UnionBounds;
             r.TargetBounds = RectDto.From(_t0);
             r.ResolvedBy = t.ResolvedBy?.ToString();
             r.Check("Target inside window", w.Bounds.Contains(_t0), $"window {w.Bounds}, target {_t0}");
             r.Check("Target and neighbor do not overlap", !_t0.IntersectsWith(_n0), $"{_t0} vs {_n0}");
-            var byName = await _engine.ResolveAsync(w, ElementLocator.ByName(StartupText), ct);
+            var byName = await _engine.ResolveAsync(w, ElementLocator.ByName(_startupText), ct);
             r.Check("Name fallback resolves the same element", byName.IsResolved && byName.UnionBounds == _t0, $"{byName.UnionBounds}");
             _toggle0 = await ReadToggleAsync(StartupCheckId);
             r.Check("Toggle state readable (not modified)", _toggle0 is not null, $"StartupCheck toggle = {_toggle0}");
@@ -209,7 +228,7 @@ public static class RetroCapScenarioRunner
 
         private async Task NativeMaskAsync(OverlaySession session, ScenarioResult r, CancellationToken ct)
         {
-            session.AddRule(MaskRule.Create(ElementLocator.Smart(automationId: StartupCheckId, name: StartupText), MaskAppearance.Solid(MaskColor), id: "startup"));
+            session.AddRule(MaskRule.Create(ElementLocator.Smart(automationId: StartupCheckId, name: _startupText), MaskAppearance.Solid(MaskColor), id: "startup"));
             await session.StartAsync(ct);
             var s = await session.WaitForRuleAsync("startup", x => x.State == RuleState.Active, o.StepTimeout, ct);
             _overlayHandles.Add(s.OverlayHandle);
@@ -233,7 +252,7 @@ public static class RetroCapScenarioRunner
             var cmp = Path.Combine(o.EvidenceDir, "retrocap-comparison.png");
             var crop = _window0.Inflate(40).Intersect(_screen);
             ComparisonImage.Create(_before!, img, _screen, crop, _t0, "Before: original RetroCap settings",
-                "After: StartupCheck hidden by a WindowVeil native mask", "WindowVeil masking RetroCap's \"Start automatically\" checkbox", cmp);
+                "After: StartupCheck hidden by a WindowVeil native mask", $"WindowVeil masking RetroCap's \"{_startupText}\" checkbox", cmp);
             manifest.Screenshots["comparison"] = "retrocap-comparison.png";
         }
 
@@ -282,7 +301,7 @@ public static class RetroCapScenarioRunner
             r.Screenshot = "retrocap-after-move.png";
             CheckMasked(r, img, t1, MaskColor, 0.97);
             var n1 = _n0.Offset(160, 90);
-            r.Check("Neighbor visible after move", ImageAnalysis.FractionNear(img, _screen, n1, MaskColor, ColorTolerance) < 0.05, "no mask pixels over StartMinimizedCheck");
+            r.Check("Neighbor visible after move", ImageAnalysis.FractionNear(img, _screen, n1, MaskColor, ColorTolerance) < 0.05, $"no mask pixels over {_neighborId}");
 
             // The WPF overlay must follow as well.
             session.UpdateRule(session.GetRule("startup")! with { Appearance = WpfAppearance.Create(() => new HiddenSettingOverlay()) });
@@ -313,7 +332,7 @@ public static class RetroCapScenarioRunner
             r.Screenshot = "retrocap-after-resize.png";
             double frac = ImageAnalysis.FractionNear(img, _screen, t2, bg, ColorTolerance);
             r.Check("Overlay covers the resized target", frac >= 0.45, $"{frac:P1}");
-            var n2 = await _engine.ResolveAsync(Target(), ElementLocator.ByAutomationId(NeighborCheckId), ct);
+            var n2 = await _engine.ResolveAsync(Target(), ElementLocator.ByAutomationId(_neighborId), ct);
             r.Check("Neighbor visible after resize", n2.IsResolved && ImageAnalysis.FractionNear(img, _screen, n2.UnionBounds, bg, ColorTolerance) < 0.05,
                 $"neighbor {n2.UnionBounds}");
 
@@ -337,8 +356,8 @@ public static class RetroCapScenarioRunner
         private async Task OcrAsync(OverlaySession session, ScenarioResult r, CancellationToken ct)
         {
             session.DisableRule("startup");
-            var locator = ElementLocator.ByOcrText(StartupText, TextMatch.Contains)
-                .Expanded(new Insets(22, 3, 3, 3), TextQuery.Containing(NeighborText)) with { MinConfidence = 0.6 };
+            var locator = ElementLocator.ByOcrText(_startupText, TextMatch.Contains)
+                .Expanded(new Insets(22, 3, 3, 3), TextQuery.Containing(_neighborText)) with { MinConfidence = 0.6 };
             session.AddRule(new OverlayRule { Id = "startup-ocr", Target = locator, Appearance = MaskAppearance.Transparent("#D81B60", 0.6) });
             var s = await session.WaitForRuleAsync("startup-ocr", x => x.State is RuleState.Active or RuleState.Unresolved, TimeSpan.FromSeconds(60), ct);
             r.ResolvedBy = s.Resolution?.ResolvedBy?.ToString();
@@ -480,7 +499,7 @@ public static class RetroCapScenarioRunner
         private void CheckNeighbor(ScenarioResult r, BgraImage img, PixelRect neighbor)
         {
             double sim = ImageAnalysis.Similarity(img, _before!, _screen, neighbor, ColorTolerance);
-            r.Check("Neighbor StartMinimizedCheck unchanged", sim >= 0.97, $"similarity {sim:P1} over {neighbor}");
+            r.Check($"Neighbor {_neighborId} unchanged", sim >= 0.97, $"similarity {sim:P1} over {neighbor}");
         }
 
         private void SaveDiagnostic(string step)
@@ -492,6 +511,18 @@ public static class RetroCapScenarioRunner
             }
             catch (Exception ex) { o.Log("    could not save diagnostic screenshot: " + ex.Message); }
         }
+
+        private Task<string?> ReadNameAsync(string automationId) => Task.Run(() =>
+        {
+            try
+            {
+                var root = AutomationElement.FromHandle(_host.MainWindow);
+                var el = root.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, automationId));
+                var name = el?.Current.Name;
+                return string.IsNullOrWhiteSpace(name) ? null : name;
+            }
+            catch (ElementNotAvailableException) { return null; }
+        });
 
         private Task<string?> ReadToggleAsync(string automationId) => Task.Run(() =>
         {

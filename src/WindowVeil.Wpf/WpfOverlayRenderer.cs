@@ -172,6 +172,17 @@ public sealed class WpfOverlayRenderer : IOverlayRenderer
     internal async ValueTask<PixelSize?> MeasureAsync(WpfOverlayVisual visual, DpiScale dpi, CancellationToken cancellationToken)
     {
         if (visual.IsDisposed || !visual.Appearance.SizeToContent) return null;
+        // Bindings (DataBind priority) and Loaded handlers queued while the content was created must run first,
+        // otherwise e.g. a TextBlock bound to a view model measures as empty. A ContextIdle no-op runs after them.
+        try
+        {
+            await GetDispatcher().InvokeAsync(static () => { }, System.Windows.Threading.DispatcherPriority.ContextIdle)
+                .Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Dispatcher shut down; the measure call below reports the failure consistently.
+        }
         return await DispatcherInvoke.RunAsync(GetDispatcher(), () =>
         {
             if (visual.IsDisposed) return (PixelSize?)null;

@@ -293,6 +293,33 @@ public sealed class WpfOverlayRendererTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task MeasureAsync_includes_text_from_data_bindings()
+    {
+        // The binding is resolved by WPF at DataBind priority after the factory returns; measuring must wait for it.
+        await using var bound = await _renderer.CreateVisualAsync(Request(WpfAppearance.Create(() =>
+        {
+            var text = new TextBlock { FontSize = 14 };
+            text.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(BoundModel.Label)));
+            text.DataContext = new BoundModel();
+            return text;
+        })));
+        await using var literal = await _renderer.CreateVisualAsync(Request(WpfAppearance.Create(() =>
+            new TextBlock { FontSize = 14, Text = new BoundModel().Label })));
+
+        var boundSize = await bound.MeasureAsync(DpiScale.Default);
+        var literalSize = await literal.MeasureAsync(DpiScale.Default);
+
+        Assert.NotNull(boundSize);
+        Assert.Equal(literalSize, boundSize);
+        Assert.True(boundSize!.Value.Width > 60, $"bound text measured {boundSize}");
+    }
+
+    private sealed class BoundModel
+    {
+        public string Label { get; } = "Masked by policy";
+    }
+
+    [Fact]
     public async Task MeasureAsync_returns_null_for_empty_content_or_when_size_to_content_is_off()
     {
         await using var empty = await _renderer.CreateVisualAsync(Request(WpfAppearance.Create(() => new Border())));
