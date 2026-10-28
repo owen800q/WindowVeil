@@ -16,6 +16,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\WindowVeil.Core\WindowVeil.Core.csproj" />
     <ProjectReference Include="..\..\src\WindowVeil.Tracking\WindowVeil.Tracking.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Capture\WindowVeil.Capture.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Native\WindowVeil.Native.csproj" />
     <ProjectReference Include="..\..\src\WindowVeil.Wpf\WindowVeil.Wpf.csproj" />
     <ProjectReference Include="..\..\src\WindowVeil.Ocr\WindowVeil.Ocr.csproj" />
     <ProjectReference Include="..\..\src\WindowVeil.Ocr.Paddle\WindowVeil.Ocr.Paddle.csproj" />

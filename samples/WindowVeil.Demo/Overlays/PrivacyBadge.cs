@@ -18,7 +18,7 @@ public sealed class PrivacyBadge : Border
         Padding = new Thickness(8, 2, 10, 2);
         var shield = new Path
         {
-            Data = Geometry.Parse("M6,0 L12,2 V7 C12,10.5 9.5,13 6,14 C2.5,13 0,10.5 0,7 V2 Z"),
+            Data = System.Windows.Media.Geometry.Parse("M6,0 L12,2 V7 C12,10.5 9.5,13 6,14 C2.5,13 0,10.5 0,7 V2 Z"),
             Fill = Brushes.White,
             Width = 10, Height = 12, Stretch = Stretch.Uniform,
             Margin = new Thickness(0, 0, 6, 0),

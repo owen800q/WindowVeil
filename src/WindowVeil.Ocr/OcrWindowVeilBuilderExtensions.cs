@@ -1,4 +1,6 @@
-namespace WindowVeil.Ocr;
+using WindowVeil.Ocr;
+
+namespace WindowVeil;
 
 /// <summary>Registers OCR support on a <see cref="WindowVeilBuilder"/>.</summary>
 public static class OcrWindowVeilBuilderExtensions
