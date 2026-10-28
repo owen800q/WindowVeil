@@ -1,0 +1,44 @@
+<!--
+  A sample custom overlay (UserControl) shown in the editor gallery and registered as "sample-card".
+  It is self-contained on purpose: overlay content is instantiated on WindowVeil's WPF overlay thread, so it must not
+  reference the editor's application or window resources (they belong to the editor's UI thread).
+-->
+<UserControl x:Class="WindowVeil.Editor.Overlays.SampleCardOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FontFamily="Segoe UI" FontSize="12" MinWidth="180">
+  <Border CornerRadius="6" Padding="10,8" BorderThickness="1">
+    <Border.Background>
+      <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F21F2937" Offset="0" />
+        <GradientStop Color="#F2111827" Offset="1" />
+      </LinearGradientBrush>
+    </Border.Background>
+    <Border.BorderBrush>
+      <SolidColorBrush Color="#FF3B82F6" />
+    </Border.BorderBrush>
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Ellipse Width="10" Height="10" Margin="0,4,8,0" VerticalAlignment="Top">
+        <Ellipse.Fill>
+          <SolidColorBrush Color="#FF22C55E" />
+        </Ellipse.Fill>
+      </Ellipse>
+      <StackPanel Grid.Column="1">
+        <TextBlock x:Name="TitleText" Text="Sample card" FontWeight="SemiBold" FontSize="13">
+          <TextBlock.Foreground>
+            <SolidColorBrush Color="#FFF9FAFB" />
+          </TextBlock.Foreground>
+        </TextBlock>
+        <TextBlock x:Name="BodyText" Text="A custom UserControl drawn by WindowVeil over another application." TextWrapping="Wrap" MaxWidth="220" Margin="0,2,0,0">
+          <TextBlock.Foreground>
+            <SolidColorBrush Color="#FFCBD5E1" />
+          </TextBlock.Foreground>
+        </TextBlock>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>
