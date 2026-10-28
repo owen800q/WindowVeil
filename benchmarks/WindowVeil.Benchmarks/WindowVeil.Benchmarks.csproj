@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>WindowVeil.Benchmarks</RootNamespace>
+    <!-- BenchmarkDotNet needs optimized code and benefits from server-like predictability. -->
+    <Optimize>true</Optimize>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WindowVeil.Core\WindowVeil.Core.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Native\WindowVeil.Native.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Tracking\WindowVeil.Tracking.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Wpf\WindowVeil.Wpf.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Automation\WindowVeil.Automation.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Ocr.Paddle\WindowVeil.Ocr.Paddle.csproj" />
+    <ProjectReference Include="..\..\samples\WindowVeil.DemoTarget\WindowVeil.DemoTarget.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\tests\WindowVeil.OcrTests\Fixtures\*.png" Link="Fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
