@@ -1,0 +1,37 @@
+<UserControl x:Class="WindowVeil.RetroCapDemo.HiddenSettingOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             SnapsToDevicePixels="True"
+             UseLayoutRounding="True"
+             AutomationProperties.Name="Setting Hidden"
+             AutomationProperties.AutomationId="WindowVeilHiddenSettingOverlay">
+  <!--
+    Replaces RetroCap's "Start automatically when I sign in to Windows" checkbox visually.
+    The overlay is pass-through by default, so it is purely visual: the checkbox underneath still exists.
+  -->
+  <Border x:Name="Root"
+          Background="#FF2B3440"
+          BorderBrush="#FF8FA3B8"
+          BorderThickness="1"
+          CornerRadius="3"
+          Padding="6,0,8,0">
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+      <!-- Lock icon: shackle + body, drawn with vector paths so it scales with DPI. -->
+      <Viewbox Width="12" Height="12" Margin="0,0,6,0" VerticalAlignment="Center">
+        <Canvas Width="16" Height="16">
+          <Path Stroke="#FFF2C14E" StrokeThickness="2" Data="M4.5,7 V5 A3.5,3.5 0 0 1 11.5,5 V7" />
+          <Rectangle Canvas.Left="2.5" Canvas.Top="7" Width="11" Height="8" RadiusX="1.5" RadiusY="1.5" Fill="#FFF2C14E" />
+          <Rectangle Canvas.Left="7.25" Canvas.Top="9.5" Width="1.5" Height="3" Fill="#FF2B3440" />
+        </Canvas>
+      </Viewbox>
+      <TextBlock x:Name="Label"
+                 Text="{Binding Text, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                 Foreground="#FFFFFFFF"
+                 FontFamily="Segoe UI"
+                 FontSize="11"
+                 FontWeight="SemiBold"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+    </StackPanel>
+  </Border>
+</UserControl>

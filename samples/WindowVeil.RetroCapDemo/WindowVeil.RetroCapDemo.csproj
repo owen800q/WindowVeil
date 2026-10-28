@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>WindowVeil.RetroCapDemo</RootNamespace>
+    <Description>Masks the "Start automatically" checkbox of the real, unmodified RetroCap.exe (native, WPF and OCR demos) and records screenshot evidence.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WindowVeil.Core\WindowVeil.Core.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Native\WindowVeil.Native.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Tracking\WindowVeil.Tracking.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Capture\WindowVeil.Capture.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Automation\WindowVeil.Automation.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Wpf\WindowVeil.Wpf.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Ocr\WindowVeil.Ocr.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Ocr.Paddle\WindowVeil.Ocr.Paddle.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+</Project>
