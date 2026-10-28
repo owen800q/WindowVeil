@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    The WindowVeil showcase. Publish as a self-contained single folder:
-      dotnet publish samples/WindowVeil.Demo/WindowVeil.Demo.csproj -c Release -r win-x64 --self-contained true -o dist
-    Running it with the demo-target switch shows the bundled demo target window in a separate process, so the published demo
-    has an external application to attach to without installing anything else.
+    The WindowVeil showcase. See README.md "Publish the demo" for the self-contained win-x64 publish command.
+    Started with the demo-target switch it shows the bundled demo target window in a separate process, so the
+    published demo always has an external application to attach to.
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
