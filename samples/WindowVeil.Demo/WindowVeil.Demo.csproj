@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The WindowVeil showcase. Publish as a self-contained single folder:
+      dotnet publish samples/WindowVeil.Demo/WindowVeil.Demo.csproj -c Release -r win-x64 --self-contained true -o dist
+    Running it with the demo-target switch shows the bundled demo target window in a separate process, so the published demo
+    has an external application to attach to without installing anything else.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>WindowVeil.Demo</RootNamespace>
+    <AssemblyName>WindowVeil.Demo</AssemblyName>
+    <Description>Interactive showcase of WindowVeil native masks, highlights, spotlights, WPF overlays, text and OCR locators.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WindowVeil.Core\WindowVeil.Core.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Tracking\WindowVeil.Tracking.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Wpf\WindowVeil.Wpf.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Ocr\WindowVeil.Ocr.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Ocr.Paddle\WindowVeil.Ocr.Paddle.csproj" />
+    <ProjectReference Include="..\..\src\WindowVeil.Profiles\WindowVeil.Profiles.csproj" />
+    <ProjectReference Include="..\WindowVeil.DemoTarget\WindowVeil.DemoTarget.csproj" />
+  </ItemGroup>
+</Project>
