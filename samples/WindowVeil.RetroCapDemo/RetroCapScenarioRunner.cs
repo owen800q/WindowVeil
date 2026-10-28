@@ -357,7 +357,7 @@ public static class RetroCapScenarioRunner
         {
             session.DisableRule("startup");
             var locator = ElementLocator.ByOcrText(_startupText, TextMatch.Contains)
-                .Expanded(new Insets(22, 3, 3, 3), TextQuery.Containing(_neighborText)) with { MinConfidence = 0.6 };
+                .Expanded(new Insets(22, 0, 2, 0), TextQuery.Containing(_neighborText)) with { MinConfidence = 0.6 };
             session.AddRule(new OverlayRule { Id = "startup-ocr", Target = locator, Appearance = MaskAppearance.Transparent("#D81B60", 0.6) });
             var s = await session.WaitForRuleAsync("startup-ocr", x => x.State is RuleState.Active or RuleState.Unresolved, TimeSpan.FromSeconds(60), ct);
             r.ResolvedBy = s.Resolution?.ResolvedBy?.ToString();
