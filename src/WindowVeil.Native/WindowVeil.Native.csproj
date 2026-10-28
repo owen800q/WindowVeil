@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>WindowVeil.Native</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>Win32 backend for WindowVeil: window enumeration, a dedicated message thread and layered popup overlays (masks, highlights, spotlights) drawn above external windows without injection.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowVeil.Core\WindowVeil.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowVeil.NativeTests" />
+  </ItemGroup>
+</Project>
