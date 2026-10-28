@@ -44,6 +44,10 @@ public sealed class OverlaySession : IAsyncDisposable
         public bool NeedsResolve = true;
         public bool CreationFailed;
         public RuleStatus Status = new() { RuleId = rule.Id, State = RuleState.Pending };
+
+        // Last status published through RuleStatusChanged. Kept separately from Status because rule changes
+        // (UpdateRule, Disable) update Status synchronously and the loop must still raise the event.
+        public RuleStatus? Raised;
     }
 
     private readonly WindowVeilEngine _engine;
@@ -65,6 +69,7 @@ public sealed class OverlaySession : IAsyncDisposable
     private long _lastTargetCheck;
     private long _lastReconnectAttempt;
     private string? _stateReason;
+    private bool _everConnected;
 
     internal OverlaySession(WindowVeilEngine engine, WindowSelector selector, TargetWindowInfo? window, SessionOptions options, ILogger logger)
     {
@@ -73,6 +78,7 @@ public sealed class OverlaySession : IAsyncDisposable
         Options = options;
         _logger = logger;
         _window = window;
+        _everConnected = window is not null;
         _state = window is null ? SessionState.WaitingForTarget : SessionState.Created;
     }
 
@@ -116,7 +122,7 @@ public sealed class OverlaySession : IAsyncDisposable
             ThrowIfDisposed();
             if (!_rules.TryAdd(rule.Id, entry))
                 throw new WindowVeilException(WindowVeilErrorCode.InvalidRule, $"A rule with id '{rule.Id}' already exists in this session.");
-            entry.Status = Status(entry, rule.Enabled ? RuleState.Pending : RuleState.Disabled);
+            entry.Status = entry.Raised = Status(entry, rule.Enabled ? RuleState.Pending : RuleState.Disabled);
         }
         Signal(Work.Rules);
         return rule;
@@ -140,7 +146,7 @@ public sealed class OverlaySession : IAsyncDisposable
             if (existing.Length > 0) throw new WindowVeilException(WindowVeilErrorCode.InvalidRule, $"Rules already exist: {string.Join(", ", existing)}.");
             foreach (var e in entries)
             {
-                e.Status = Status(e, e.Rule.Enabled ? RuleState.Pending : RuleState.Disabled);
+                e.Status = e.Raised = Status(e, e.Rule.Enabled ? RuleState.Pending : RuleState.Disabled);
                 _rules.Add(e.Rule.Id, e);
             }
         }
@@ -527,6 +533,7 @@ public sealed class OverlaySession : IAsyncDisposable
     private async Task ProcessAsync(Work work, CancellationToken ct)
     {
         List<IOverlayVisual> disposals;
+        bool reconnected = false;
         lock (_gate) { disposals = [.. _pendingDisposals]; _pendingDisposals.Clear(); }
         await DisposeVisualsAsync(disposals).ConfigureAwait(false);
 
@@ -538,9 +545,11 @@ public sealed class OverlaySession : IAsyncDisposable
         }
         if (state == SessionState.WaitingForTarget)
         {
-            if ((work & (Work.Reconnect | Work.Rules | Work.TargetCheck)) == 0 && _window is not null) return;
+            if ((work & (Work.Reconnect | Work.Rules | Work.TargetCheck)) == 0 && _everConnected) return;
+            bool hadTarget = _everConnected;
             if (!TryReconnect()) { await HideAllAsync("Waiting for target window", ct).ConfigureAwait(false); return; }
             work |= Work.All;
+            reconnected = hadTarget;
         }
         if (State != SessionState.Running) return;
 
@@ -565,13 +574,18 @@ public sealed class OverlaySession : IAsyncDisposable
         // Phase A: cheap updates (translate cached geometry on pure moves) and immediate render.
         foreach (var e in entries)
         {
-            if (!e.Rule.Enabled || !e.Rule.FollowTarget || e.Resolution is null) continue;
-            if (!e.Rule.Target.IsWindowDependent) continue;
-            if (sizeChanged || e.Rule.Target is WindowRelativeLocator or NormalizedLocator or FallbackLocator { Locators: [WindowRelativeLocator or NormalizedLocator] })
-                e.NeedsResolve = true;
-            else if ((dx != 0 || dy != 0) && e.Resolution.IsResolved)
-                e.Resolution = e.Resolution.Translate(dx, dy);
-            if (contentWork) e.NeedsResolve = true;
+            lock (_gate)
+            {
+                var rule = e.Rule;
+                var resolution = e.Resolution;
+                if (!rule.Enabled || !rule.FollowTarget || resolution is null) continue;
+                if (!rule.Target.IsWindowDependent) continue;
+                if (sizeChanged || rule.Target is WindowRelativeLocator or NormalizedLocator or FallbackLocator { Locators: [WindowRelativeLocator or NormalizedLocator] })
+                    e.NeedsResolve = true;
+                else if ((dx != 0 || dy != 0) && resolution.IsResolved)
+                    e.Resolution = resolution.Translate(dx, dy);
+                if (contentWork) e.NeedsResolve = true;
+            }
         }
         await RenderAsync(entries, fresh, ct).ConfigureAwait(false);
 
@@ -582,19 +596,44 @@ public sealed class OverlaySession : IAsyncDisposable
         {
             ct.ThrowIfCancellationRequested();
             bool needs;
-            lock (_gate) needs = e.Rule.Enabled && e.NeedsResolve && _rules.ContainsKey(e.Rule.Id) && (e.Rule.FollowTarget || e.Resolution is null || !e.Resolution.IsResolved);
-            if (!needs) continue;
-            var reason = e.Resolution is null ? ResolveReason.Initial : sizeChanged ? ResolveReason.WindowChanged : (work & Work.Poll) != 0 ? ResolveReason.Poll : ResolveReason.ContentChanged;
-            var result = await ResolveAsync(e, fresh, reason, ct).ConfigureAwait(false);
+            ElementLocator target;
+            LocatorResolution? previous;
             lock (_gate)
             {
-                e.NeedsResolve = false;
-                // OCR and other rate-limited resolvers return Cached: keep the previous geometry.
-                if (result.Status != LocatorStatus.Cached || e.Resolution is not { IsResolved: true })
+                needs = e.Rule.Enabled && e.NeedsResolve && IsCurrent(e) && (e.Rule.FollowTarget || e.Resolution is null || !e.Resolution.IsResolved);
+                target = e.Rule.Target;
+                previous = e.Resolution;
+            }
+            if (!needs) continue;
+            var reason = previous is null
+                ? (reconnected ? ResolveReason.Reconnected : ResolveReason.Initial)
+                : sizeChanged ? ResolveReason.WindowChanged : (work & Work.Poll) != 0 ? ResolveReason.Poll : ResolveReason.ContentChanged;
+            var result = await ResolveAsync(target, previous, fresh, reason, ct).ConfigureAwait(false);
+            lock (_gate)
+            {
+                LocatorResolution? discard;
+                if (!IsCurrent(e) || !Equals(e.Rule.Target, target))
                 {
-                    if (e.Resolution is not null && !ReferenceEquals(e.Resolution.State, result.State)) ReleaseState(e.Resolution);
-                    e.Resolution = result;
+                    // The rule was removed or got a new locator while resolving: the result is stale. NeedsResolve keeps
+                    // the value UpdateRule set, so the new locator is resolved on the next pass.
+                    discard = result;
                 }
+                else
+                {
+                    e.NeedsResolve = false;
+                    // OCR and other rate-limited resolvers return Cached: keep the previous geometry.
+                    if (result.Status == LocatorStatus.Cached && e.Resolution is { IsResolved: true })
+                    {
+                        discard = result;
+                    }
+                    else
+                    {
+                        discard = e.Resolution;
+                        e.Resolution = result;
+                    }
+                }
+                // Release resolver state that is no longer referenced (state reused by the kept resolution survives).
+                ReleaseState(discard, keep: e.Resolution);
             }
             anyResolved = true;
         }
@@ -606,14 +645,14 @@ public sealed class OverlaySession : IAsyncDisposable
         }
     }
 
-    private async Task<LocatorResolution> ResolveAsync(RuleEntry e, TargetWindowInfo window, ResolveReason reason, CancellationToken ct)
+    private async Task<LocatorResolution> ResolveAsync(ElementLocator target, LocatorResolution? previous, TargetWindowInfo window, ResolveReason reason, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(Options.ResolveTimeout);
         var overlays = OverlayWindowRegistry.Snapshot();
         var context = new LocatorContext(window, reason)
         {
-            Previous = e.Resolution,
+            Previous = previous,
             Capture = _engine.Options.Capture,
             Logger = _logger,
             OverlayWindows = overlays,
@@ -621,11 +660,11 @@ public sealed class OverlaySession : IAsyncDisposable
         };
         try
         {
-            return await _engine.Locators.ResolveAsync(e.Rule.Target, context, timeout.Token).ConfigureAwait(false);
+            return await _engine.Locators.ResolveAsync(target, context, timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return LocatorResolution.Failed(e.Rule.Target, LocatorStatus.Error, $"Resolution timed out after {Options.ResolveTimeout}.");
+            return LocatorResolution.Failed(target, LocatorStatus.Error, $"Resolution timed out after {Options.ResolveTimeout}.");
         }
     }
 
@@ -635,28 +674,35 @@ public sealed class OverlaySession : IAsyncDisposable
         var statusChanges = new List<RuleStatus>();
         foreach (var e in entries)
         {
-            bool alive;
-            lock (_gate) alive = _rules.TryGetValue(e.Rule.Id, out var cur) && ReferenceEquals(cur, e);
-            if (!alive) continue;
+            // Rule changes run concurrently on other threads: read each mutable field once.
+            OverlayRule rule;
+            LocatorResolution? resolution;
+            IOverlayVisual? visual;
+            lock (_gate)
+            {
+                if (!IsCurrent(e)) continue;
+                rule = e.Rule;
+                resolution = e.Resolution;
+                visual = e.Visual;
+            }
 
-            var rule = e.Rule;
             RuleState state;
             string? message = null;
             WindowVeilErrorCode? error = null;
             OverlayFrame frame = OverlayFrame.Hidden;
 
             if (!rule.Enabled) state = RuleState.Disabled;
-            else if (e.Resolution is null) state = RuleState.Pending;
-            else if (!e.Resolution.IsResolved)
+            else if (resolution is null) state = RuleState.Pending;
+            else if (!resolution.IsResolved)
             {
                 state = RuleState.Unresolved;
-                message = e.Resolution.Message;
-                error = e.Resolution.Status switch
+                message = resolution.Message;
+                error = resolution.Status switch
                 {
-                    LocatorStatus.Unavailable when e.Resolution.ResolvedBy is OcrTextLocator => WindowVeilErrorCode.OcrUnavailable,
-                    LocatorStatus.Unavailable when e.Resolution.ResolvedBy is UiAutomationLocator or TextLocator => WindowVeilErrorCode.UiAutomationUnavailable,
+                    LocatorStatus.Unavailable when resolution.ResolvedBy is OcrTextLocator => WindowVeilErrorCode.OcrUnavailable,
+                    LocatorStatus.Unavailable when resolution.ResolvedBy is UiAutomationLocator or TextLocator => WindowVeilErrorCode.UiAutomationUnavailable,
                     LocatorStatus.Unavailable => WindowVeilErrorCode.CaptureUnavailable,
-                    LocatorStatus.Rejected when e.Resolution.ResolvedBy is OcrTextLocator => WindowVeilErrorCode.OcrConfidenceTooLow,
+                    LocatorStatus.Rejected when resolution.ResolvedBy is OcrTextLocator => WindowVeilErrorCode.OcrConfidenceTooLow,
                     LocatorStatus.Error => WindowVeilErrorCode.Unknown,
                     _ => WindowVeilErrorCode.ElementNotFound,
                 };
@@ -665,33 +711,33 @@ public sealed class OverlaySession : IAsyncDisposable
             else if (rule.Visibility == OverlayVisibility.WhenTargetForeground && !window.IsForeground) { state = RuleState.Hidden; message = "Target is not in the foreground"; }
             else
             {
-                if (e.Visual is null && !e.CreationFailed)
+                if (visual is null && !e.CreationFailed)
                 {
                     try
                     {
-                        var visual = await e.Renderer.CreateVisualAsync(new OverlayVisualRequest(rule.Id, e.Appearance)
+                        var created = await e.Renderer.CreateVisualAsync(new OverlayVisualRequest(rule.Id, e.Appearance)
                         {
                             InputMode = rule.InputMode, FocusPolicy = rule.FocusPolicy, ZOrder = rule.ZOrder,
                         }, ct).ConfigureAwait(false);
                         bool keep;
                         lock (_gate)
                         {
-                            keep = _rules.TryGetValue(rule.Id, out var cur) && ReferenceEquals(cur, e) && e.Visual is null && ReferenceEquals(e.Rule, rule);
-                            if (keep) e.Visual = visual;
+                            keep = IsCurrent(e) && e.Visual is null && ReferenceEquals(e.Rule, rule);
+                            if (keep) e.Visual = created;
                         }
-                        if (!keep) { await DisposeVisualsAsync([visual]).ConfigureAwait(false); continue; }
+                        if (!keep) { await DisposeVisualsAsync([created]).ConfigureAwait(false); continue; }
+                        visual = created;
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                     catch (Exception ex)
                     {
                         e.CreationFailed = true;
                         _logger.LogError(ex, "Failed to create overlay for rule {RuleId}", rule.Id);
-                        e.Status = Status(e, RuleState.Failed, ex.Message, ex is WindowVeilException wv ? wv.Code : WindowVeilErrorCode.OverlayCreationFailed);
-                        statusChanges.Add(e.Status);
+                        Publish(e, Status(e, RuleState.Failed, ex.Message, ex is WindowVeilException wv ? wv.Code : WindowVeilErrorCode.OverlayCreationFailed), statusChanges);
                         continue;
                     }
                 }
-                if (e.Visual is null) { state = RuleState.Failed; error = WindowVeilErrorCode.OverlayCreationFailed; message = e.Status.Message; }
+                if (visual is null) { state = RuleState.Failed; error = WindowVeilErrorCode.OverlayCreationFailed; message = e.Status.Message; }
                 else
                 {
                     PixelSize? size = null;
@@ -699,30 +745,25 @@ public sealed class OverlaySession : IAsyncDisposable
                     {
                         if (e.Measured is not { } m || m.Dpi != window.Dpi)
                         {
-                            try { e.Measured = (window.Dpi, await e.Visual.MeasureAsync(window.Dpi, ct).ConfigureAwait(false)); }
+                            try { e.Measured = (window.Dpi, await visual.MeasureAsync(window.Dpi, ct).ConfigureAwait(false)); }
                             catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning(ex, "Measure failed for {RuleId}", rule.Id); e.Measured = (window.Dpi, null); }
                         }
                         size = e.Measured?.Size;
                     }
-                    var regions = PlacementCalculator.Calculate(e.Resolution.Bounds, rule.Placement, window.Dpi, size);
-                    frame = OverlayFrame.Show(regions, e.Resolution.Bounds, window);
+                    var regions = PlacementCalculator.Calculate(resolution.Bounds, rule.Placement, window.Dpi, size);
+                    frame = OverlayFrame.Show(regions, resolution.Bounds, window);
                     state = frame.Visible ? RuleState.Active : RuleState.Hidden;
                 }
             }
 
-            if (e.Visual is not null && !frame.IsEquivalentTo(e.Visual.CurrentFrame) &&
-                !(frame.Visible == false && (e.Visual.CurrentFrame is null || !e.Visual.CurrentFrame.Visible)))
+            if (visual is not null && !frame.IsEquivalentTo(visual.CurrentFrame) &&
+                !(frame.Visible == false && (visual.CurrentFrame is null || !visual.CurrentFrame.Visible)))
             {
                 if (!batches.TryGetValue(e.Renderer, out var list)) batches[e.Renderer] = list = [];
-                list.Add(new OverlayVisualUpdate(e.Visual, frame));
+                list.Add(new OverlayVisualUpdate(visual, frame));
             }
 
-            var status = Status(e, state, message, error, frame.Visible ? frame.Regions : []);
-            if (!SameStatus(status, e.Status))
-            {
-                lock (_gate) e.Status = status;
-                statusChanges.Add(status);
-            }
+            Publish(e, Status(e, state, message, error, frame.Visible ? frame.Regions : []), statusChanges);
         }
 
         foreach (var (renderer, updates) in batches)
@@ -737,8 +778,7 @@ public sealed class OverlaySession : IAsyncDisposable
                     RuleEntry? e;
                     lock (_gate) _rules.TryGetValue(u.Visual.RuleId, out e);
                     if (e is null) continue;
-                    lock (_gate) e.Status = Status(e, RuleState.Failed, ex.Message, WindowVeilErrorCode.OverlayCreationFailed);
-                    statusChanges.Add(e.Status);
+                    Publish(e, Status(e, RuleState.Failed, ex.Message, WindowVeilErrorCode.OverlayCreationFailed), statusChanges);
                 }
             }
         }
@@ -760,8 +800,7 @@ public sealed class OverlaySession : IAsyncDisposable
                 list.Add(new OverlayVisualUpdate(e.Visual, OverlayFrame.Hidden));
             }
             var state = e.Rule.Enabled ? RuleState.Hidden : RuleState.Disabled;
-            var status = Status(e, state, e.Rule.Enabled ? reason : null);
-            if (!SameStatus(status, e.Status)) { lock (_gate) e.Status = status; changes.Add(status); }
+            Publish(e, Status(e, state, e.Rule.Enabled ? reason : null), changes);
         }
         foreach (var (renderer, updates) in batches)
         {
@@ -784,6 +823,7 @@ public sealed class OverlaySession : IAsyncDisposable
                 e.Resolution = null;
                 e.NeedsResolve = true;
             }
+            _window = null;
             bool canReconnect = Options.AutoReconnect && Selector.Handle is null;
             SetStateLocked(canReconnect ? SessionState.WaitingForTarget : SessionState.TargetLost, reason);
         }
@@ -793,7 +833,6 @@ public sealed class OverlaySession : IAsyncDisposable
 
     private bool TryReconnect()
     {
-        var previous = _window;
         var candidates = _engine.WindowSystem.EnumerateWindows()
             .Where(w => !OverlayWindowRegistry.IsOverlay(w.Handle))
             .ToArray();
@@ -802,8 +841,9 @@ public sealed class OverlaySession : IAsyncDisposable
         lock (_gate)
         {
             _window = found;
-            foreach (var e in _rules.Values) { e.NeedsResolve = true; e.Resolution = null; }
-            SetStateLocked(SessionState.Running, previous is null ? "Target found" : "Target reconnected");
+            foreach (var e in _rules.Values) { e.NeedsResolve = true; ReleaseState(e.Resolution); e.Resolution = null; }
+            SetStateLocked(SessionState.Running, _everConnected ? "Target reconnected" : "Target found");
+            _everConnected = true;
         }
         Subscribe(found);
         _logger.LogInformation("Connected to {Window}", found);
@@ -824,6 +864,21 @@ public sealed class OverlaySession : IAsyncDisposable
         Renderer = e.Renderer.Name,
         OverlayHandle = e.Visual?.Handle ?? 0,
     };
+
+    /// <summary>Stores a computed status and queues an event when it differs from the last published one.</summary>
+    private void Publish(RuleEntry e, RuleStatus status, List<RuleStatus> changes)
+    {
+        lock (_gate)
+        {
+            e.Status = status;
+            if (e.Raised is not null && SameStatus(status, e.Raised)) return;
+            e.Raised = status;
+        }
+        changes.Add(status);
+    }
+
+    /// <summary>Whether the entry is still the live entry for its rule id (not removed or replaced). Call under the lock.</summary>
+    private bool IsCurrent(RuleEntry e) => _rules.TryGetValue(e.Rule.Id, out var cur) && ReferenceEquals(cur, e);
 
     private static bool SameStatus(RuleStatus a, RuleStatus b) =>
         a.State == b.State && a.Error == b.Error && a.Message == b.Message && a.OverlayHandle == b.OverlayHandle &&
@@ -884,11 +939,19 @@ public sealed class OverlaySession : IAsyncDisposable
         }
     }
 
-    private static void ReleaseState(LocatorResolution? resolution)
+    /// <summary>
+    /// Disposes resolver state held by <paramref name="resolution"/> and its attempts, except state that is still
+    /// referenced by <paramref name="keep"/> (resolvers may hand the previous state to the next resolution).
+    /// </summary>
+    private static void ReleaseState(LocatorResolution? resolution, LocatorResolution? keep = null)
     {
-        if (resolution is null) return;
+        if (resolution is null || ReferenceEquals(resolution, keep)) return;
+        var kept = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        if (keep is not null)
+            foreach (var r in keep.Attempts.Append(keep))
+                if (r.State is not null) kept.Add(r.State);
         foreach (var r in resolution.Attempts.Append(resolution))
-            if (r.State is IDisposable d) { try { d.Dispose(); } catch (ObjectDisposedException) { } }
+            if (r.State is IDisposable d && kept.Add(d)) { try { d.Dispose(); } catch (ObjectDisposedException) { } }
     }
 
     private void ThrowIfDisposed()

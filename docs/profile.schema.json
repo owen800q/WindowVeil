@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/owen800q/WindowVeil/blob/main/docs/profile.schema.json",
+  "title": "WindowVeil overlay profile",
+  "description": "Schema version 1 of WindowVeil JSON overlay profiles. Property names are camelCase and case-sensitive. Rule ids must be unique within a profile (not expressible in JSON Schema; enforced by the loader). Documents without schemaVersion (or with 0) use the pre-release 0.x draft format and are migrated automatically when loaded.",
+  "type": "object",
+  "required": ["schemaVersion", "name", "application", "rules"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string", "description": "Optional schema reference for editors; ignored by the loader." },
+    "schemaVersion": { "const": 1, "description": "Profile schema version. Newer versions are rejected by older WindowVeil releases." },
+    "name": { "$ref": "#/$defs/nonEmptyString", "description": "Display name of the profile." },
+    "application": { "$ref": "#/$defs/application" },
+    "rules": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "color": {
+      "type": "string",
+      "pattern": "^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+      "description": "#RGB, #RRGGBB or #AARRGGBB. Alpha is ignored (a warning is reported); use opacity instead."
+    },
+    "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+    "coordinate": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+    "size": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+    "dip": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+    "fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+    "positiveFraction": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+    "anchor": { "enum": ["client", "window"], "default": "client" },
+    "textMatch": { "enum": ["exact", "contains", "startsWith", "regex"] },
+    "insets": {
+      "description": "A uniform value or per-side values, in DIPs.",
+      "oneOf": [
+        { "$ref": "#/$defs/dip" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "left": { "$ref": "#/$defs/dip" },
+            "top": { "$ref": "#/$defs/dip" },
+            "right": { "$ref": "#/$defs/dip" },
+            "bottom": { "$ref": "#/$defs/dip" }
+          }
+        }
+      ]
+    },
+
+    "application": {
+      "type": "object",
+      "description": "Selects the target window. Every specified condition must match. At least one of processName, titleContains, titlePattern, className is required.",
+      "additionalProperties": false,
+      "properties": {
+        "processName": { "$ref": "#/$defs/nonEmptyString", "description": "Process name without .exe (case-insensitive)." },
+        "titleContains": { "$ref": "#/$defs/nonEmptyString", "description": "Case-insensitive title substring." },
+        "titlePattern": { "type": "string", "minLength": 1, "maxLength": 1024, "description": ".NET regular expression matched against the title." },
+        "className": { "$ref": "#/$defs/nonEmptyString", "description": "Exact window class name." },
+        "requireVisible": { "type": "boolean", "default": true },
+        "requireTitle": { "type": "boolean", "default": true }
+      },
+      "anyOf": [
+        { "required": ["processName"] },
+        { "required": ["titleContains"] },
+        { "required": ["titlePattern"] },
+        { "required": ["className"] }
+      ]
+    },
+
+    "rule": {
+      "type": "object",
+      "required": ["id", "locator", "appearance"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id", "description": "Unique within the profile." },
+        "name": { "$ref": "#/$defs/nonEmptyString", "description": "Display name." },
+        "group": { "$ref": "#/$defs/nonEmptyString", "description": "Rules in a group can be enabled or disabled together." },
+        "locator": { "$ref": "#/$defs/locator" },
+        "appearance": { "$ref": "#/$defs/appearance" },
+        "placement": { "$ref": "#/$defs/placement" },
+        "inputMode": { "enum": ["passThrough", "interactive"], "default": "passThrough" },
+        "focusPolicy": { "enum": ["noActivate", "activateOnClick"], "default": "noActivate" },
+        "zOrder": { "enum": ["aboveTarget", "topmost"], "default": "aboveTarget" },
+        "followTarget": { "type": "boolean", "default": true },
+        "enabled": { "type": "boolean", "default": true },
+        "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000, "default": 0 },
+        "visibility": { "enum": ["whenTargetVisible", "whenTargetForeground"], "default": "whenTargetVisible" }
+      }
+    },
+
+    "locator": {
+      "description": "Where the overlay attaches. Locators may be nested (fallback, ancestor, scope) at most 8 levels deep.",
+      "oneOf": [
+        { "$ref": "#/$defs/rectangleLocator" },
+        { "$ref": "#/$defs/windowRelativeLocator" },
+        { "$ref": "#/$defs/normalizedLocator" },
+        { "$ref": "#/$defs/uiAutomationLocator" },
+        { "$ref": "#/$defs/textLocator" },
+        { "$ref": "#/$defs/ocrTextLocator" },
+        { "$ref": "#/$defs/fallbackLocator" }
+      ]
+    },
+    "rectangleLocator": {
+      "type": "object",
+      "description": "Absolute rectangle in physical virtual-desktop pixels; does not follow the window.",
+      "required": ["type", "x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "rectangle" },
+        "x": { "$ref": "#/$defs/coordinate" },
+        "y": { "$ref": "#/$defs/coordinate" },
+        "width": { "$ref": "#/$defs/size" },
+        "height": { "$ref": "#/$defs/size" }
+      }
+    },
+    "windowRelativeLocator": {
+      "type": "object",
+      "description": "Rectangle in physical pixels relative to the window or client origin; follows the window.",
+      "required": ["type", "x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "windowRelative" },
+        "x": { "$ref": "#/$defs/coordinate" },
+        "y": { "$ref": "#/$defs/coordinate" },
+        "width": { "$ref": "#/$defs/size" },
+        "height": { "$ref": "#/$defs/size" },
+        "anchor": { "$ref": "#/$defs/anchor" }
+      }
+    },
+    "normalizedLocator": {
+      "type": "object",
+      "description": "Rectangle as fractions (0..1) of the window or client size; follows moves and scales with resizes.",
+      "required": ["type", "x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "normalized" },
+        "x": { "$ref": "#/$defs/fraction" },
+        "y": { "$ref": "#/$defs/fraction" },
+        "width": { "$ref": "#/$defs/positiveFraction" },
+        "height": { "$ref": "#/$defs/positiveFraction" },
+        "anchor": { "$ref": "#/$defs/anchor" }
+      }
+    },
+    "uiAutomationLocator": {
+      "type": "object",
+      "description": "A UI Automation element. All specified conditions must match. fallbackName adds a second strategy that matches the Name only (FallbackLocator [primary, ByName(fallbackName)]); nameMatch and ignoreCase apply to both name and fallbackName.",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "uiAutomation" },
+        "automationId": { "$ref": "#/$defs/nonEmptyString" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "nameMatch": { "$ref": "#/$defs/textMatch", "default": "exact" },
+        "ignoreCase": { "type": "boolean", "default": false },
+        "controlType": { "$ref": "#/$defs/nonEmptyString", "description": "Programmatic name such as CheckBox or Button." },
+        "className": { "$ref": "#/$defs/nonEmptyString" },
+        "index": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 0 },
+        "maxDepth": { "type": "integer", "minimum": 1, "maximum": 256, "default": 32 },
+        "maxNodes": { "type": "integer", "minimum": 1, "maximum": 100000, "default": 5000 },
+        "ancestor": { "$ref": "#/$defs/uiAutomationSelector" },
+        "fallbackName": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "anyOf": [
+        { "required": ["automationId"] },
+        { "required": ["name"] },
+        { "required": ["controlType"] },
+        { "required": ["className"] }
+      ]
+    },
+    "uiAutomationSelector": {
+      "type": "object",
+      "description": "UI Automation conditions used as an ancestor or a search scope (type is optional; fallbackName is not allowed).",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "uiAutomation" },
+        "automationId": { "$ref": "#/$defs/nonEmptyString" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "nameMatch": { "$ref": "#/$defs/textMatch", "default": "exact" },
+        "ignoreCase": { "type": "boolean", "default": false },
+        "controlType": { "$ref": "#/$defs/nonEmptyString" },
+        "className": { "$ref": "#/$defs/nonEmptyString" },
+        "index": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 0 },
+        "maxDepth": { "type": "integer", "minimum": 1, "maximum": 256, "default": 32 },
+        "maxNodes": { "type": "integer", "minimum": 1, "maximum": 100000, "default": 5000 },
+        "ancestor": { "$ref": "#/$defs/uiAutomationSelector" }
+      },
+      "anyOf": [
+        { "required": ["automationId"] },
+        { "required": ["name"] },
+        { "required": ["controlType"] },
+        { "required": ["className"] }
+      ]
+    },
+    "textLocator": {
+      "type": "object",
+      "description": "Text exposed through UI Automation (TextPattern ranges or text element names).",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "text" },
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "match": { "$ref": "#/$defs/textMatch", "default": "contains" },
+        "ignoreCase": { "type": "boolean", "default": true },
+        "allMatches": { "type": "boolean", "default": true },
+        "scope": { "$ref": "#/$defs/uiAutomationSelector" }
+      }
+    },
+    "textQuery": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "match": { "$ref": "#/$defs/textMatch", "default": "contains" },
+        "ignoreCase": { "type": "boolean", "default": true }
+      }
+    },
+    "ocrTextLocator": {
+      "type": "object",
+      "description": "Text recognized by OCR in a capture of the target window.",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "ocrText" },
+        "text": { "$ref": "#/$defs/nonEmptyString" },
+        "match": { "$ref": "#/$defs/textMatch", "default": "contains" },
+        "ignoreCase": { "type": "boolean", "default": true },
+        "minConfidence": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.6 },
+        "searchRegion": {
+          "type": "object",
+          "description": "Client-relative physical pixels.",
+          "required": ["x", "y", "width", "height"],
+          "additionalProperties": false,
+          "properties": {
+            "x": { "$ref": "#/$defs/coordinate" },
+            "y": { "$ref": "#/$defs/coordinate" },
+            "width": { "$ref": "#/$defs/size" },
+            "height": { "$ref": "#/$defs/size" }
+          }
+        },
+        "expand": { "$ref": "#/$defs/insets" },
+        "mustNotOverlap": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/textQuery" } },
+        "minIntervalMs": { "type": "integer", "minimum": 0, "maximum": 86400000, "default": 1000 },
+        "allMatches": { "type": "boolean", "default": true }
+      }
+    },
+    "fallbackLocator": {
+      "type": "object",
+      "description": "Tries each locator in order; the first that resolves wins.",
+      "required": ["type", "locators"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "fallback" },
+        "locators": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/locator" } },
+        "continueOnError": { "type": "boolean", "default": true }
+      }
+    },
+
+    "appearance": {
+      "description": "What the overlay looks like. Custom (for example WPF) appearances are only reachable through ids the application registered (type 'registered'); .NET type names are never accepted.",
+      "oneOf": [
+        { "$ref": "#/$defs/solidAppearance" },
+        { "$ref": "#/$defs/transparentAppearance" },
+        { "$ref": "#/$defs/highlightAppearance" },
+        { "$ref": "#/$defs/spotlightAppearance" },
+        { "$ref": "#/$defs/registeredAppearance" }
+      ]
+    },
+    "solidAppearance": {
+      "type": "object",
+      "required": ["type", "color"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "solid" },
+        "color": { "$ref": "#/$defs/color" },
+        "opacity": { "$ref": "#/$defs/opacity", "default": 1 }
+      }
+    },
+    "transparentAppearance": {
+      "type": "object",
+      "required": ["type", "color"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "transparent" },
+        "color": { "$ref": "#/$defs/color" },
+        "opacity": { "$ref": "#/$defs/opacity", "default": 0.5 }
+      }
+    },
+    "highlightAppearance": {
+      "type": "object",
+      "required": ["type", "color"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "highlight" },
+        "color": { "$ref": "#/$defs/color" },
+        "thickness": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000, "default": 3 },
+        "opacity": { "$ref": "#/$defs/opacity", "default": 1 }
+      }
+    },
+    "spotlightAppearance": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "spotlight" },
+        "color": { "$ref": "#/$defs/color", "default": "#000000" },
+        "opacity": { "$ref": "#/$defs/opacity", "default": 0.6 },
+        "scope": { "enum": ["targetWindow", "monitor"], "default": "targetWindow" }
+      }
+    },
+    "registeredAppearance": {
+      "type": "object",
+      "required": ["type", "factory"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "registered" },
+        "factory": { "$ref": "#/$defs/id", "description": "Id registered with AppearanceRegistry.Register (case-insensitive)." },
+        "parameters": {
+          "type": "object",
+          "maxProperties": 64,
+          "additionalProperties": { "type": "string", "maxLength": 4096 }
+        }
+      }
+    },
+
+    "placement": {
+      "description": "A preset name, or an object that starts from the preset of its mode and overrides individual fields. Offsets, padding and sizes are DIPs.",
+      "oneOf": [
+        { "enum": ["cover", "right", "left", "above", "below", "center"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "enum": ["cover", "right", "left", "above", "below", "center"], "default": "cover" },
+            "offsetX": { "$ref": "#/$defs/dip" },
+            "offsetY": { "$ref": "#/$defs/dip" },
+            "padding": { "$ref": "#/$defs/insets" },
+            "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+            "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+            "alignment": { "enum": ["start", "center", "end"] },
+            "multiRect": { "enum": ["each", "union"] }
+          }
+        }
+      ]
+    }
+  }
+}

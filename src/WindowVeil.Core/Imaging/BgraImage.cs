@@ -25,7 +25,15 @@ public sealed class BgraImage
     }
 
     /// <summary>Creates a zero-initialized (transparent black) image.</summary>
-    public BgraImage(int width, int height) : this(width, height, new byte[checked(width * 4 * height)]) { }
+    public BgraImage(int width, int height) : this(width, height, Allocate(width, height)) { }
+
+    // Validate before allocating so invalid sizes raise ArgumentOutOfRangeException rather than OverflowException.
+    private static byte[] Allocate(int width, int height)
+    {
+        if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width), width, "Width must be positive.");
+        if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height), height, "Height must be positive.");
+        return new byte[checked(width * 4 * height)];
+    }
 
     /// <summary>Width in pixels.</summary>
     public int Width { get; }

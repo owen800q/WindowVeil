@@ -245,6 +245,15 @@ public sealed record OcrTextLocator(TextQuery Query) : ElementLocator
     /// <summary>Returns a copy with an expansion.</summary>
     public OcrTextLocator Expanded(Insets expand, params TextQuery[] mustNotOverlap) =>
         this with { Expand = expand, MustNotOverlap = mustNotOverlap };
+
+    /// <inheritdoc />
+    public bool Equals(OcrTextLocator? other) =>
+        other is not null && Query == other.Query && MinConfidence == other.MinConfidence && SearchRegion == other.SearchRegion &&
+        Expand == other.Expand && MinInterval == other.MinInterval && AllMatches == other.AllMatches &&
+        MustNotOverlap.SequenceEqual(other.MustNotOverlap);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(Query, MinConfidence, SearchRegion, Expand, MinInterval, AllMatches, MustNotOverlap.Count);
 }
 
 /// <summary>An ordered chain of locators; the first that resolves wins.</summary>
