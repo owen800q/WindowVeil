@@ -1,0 +1,314 @@
+{
+  "en_settings": {
+    "file": "en_settings.png",
+    "width": 520,
+    "height": 100,
+    "items": [
+      {
+        "kind": "checkbox",
+        "box": [
+          16,
+          22,
+          16,
+          16
+        ],
+        "checked": true
+      },
+      {
+        "kind": "text",
+        "text": "Start automatically when I sign in to Windows",
+        "box": [
+          42,
+          24,
+          344,
+          14
+        ]
+      },
+      {
+        "kind": "checkbox",
+        "box": [
+          16,
+          60,
+          16,
+          16
+        ],
+        "checked": false
+      },
+      {
+        "kind": "text",
+        "text": "Start hidden in the notification area",
+        "box": [
+          42,
+          62,
+          268,
+          11
+        ]
+      }
+    ]
+  },
+  "en_balance": {
+    "file": "en_balance.png",
+    "width": 360,
+    "height": 56,
+    "items": [
+      {
+        "kind": "text",
+        "text": "Account Balance $12,345.67",
+        "box": [
+          14,
+          19,
+          259,
+          17
+        ]
+      }
+    ]
+  },
+  "zh_hans": {
+    "file": "zh_hans.png",
+    "width": 300,
+    "height": 110,
+    "items": [
+      {
+        "kind": "text",
+        "text": "账户余额",
+        "box": [
+          16,
+          19,
+          88,
+          23
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "开机时自动启动",
+        "box": [
+          16,
+          65,
+          154,
+          22
+        ]
+      }
+    ]
+  },
+  "zh_hant": {
+    "file": "zh_hant.png",
+    "width": 300,
+    "height": 110,
+    "items": [
+      {
+        "kind": "text",
+        "text": "帳戶餘額",
+        "box": [
+          16,
+          19,
+          88,
+          23
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "設定",
+        "box": [
+          16,
+          64,
+          44,
+          24
+        ]
+      }
+    ]
+  },
+  "ja": {
+    "file": "ja.png",
+    "width": 300,
+    "height": 110,
+    "items": [
+      {
+        "kind": "text",
+        "text": "設定を保存",
+        "box": [
+          16,
+          18,
+          111,
+          24
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "ログイン",
+        "box": [
+          16,
+          67,
+          90,
+          21
+        ]
+      }
+    ]
+  },
+  "en_multiline": {
+    "file": "en_multiline.png",
+    "width": 560,
+    "height": 150,
+    "items": [
+      {
+        "kind": "text",
+        "text": "WindowVeil places masks over external windows.",
+        "box": [
+          14,
+          17,
+          371,
+          14
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "Text that UI Automation cannot expose is found",
+        "box": [
+          13,
+          49,
+          358,
+          14
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "with on-device OCR and covered automatically.",
+        "box": [
+          14,
+          81,
+          355,
+          14
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "Version 2.4.1 (build 1187), 3 items selected",
+        "box": [
+          14,
+          113,
+          328,
+          13
+        ]
+      }
+    ]
+  },
+  "en_low_contrast": {
+    "file": "en_low_contrast.png",
+    "width": 360,
+    "height": 56,
+    "items": [
+      {
+        "kind": "text",
+        "text": "Serial number 7Q4-XK2-M9",
+        "box": [
+          14,
+          20,
+          176,
+          13
+        ]
+      }
+    ]
+  },
+  "blank": {
+    "file": "blank.png",
+    "width": 320,
+    "height": 120,
+    "items": []
+  },
+  "dialog": {
+    "file": "dialog.png",
+    "width": 480,
+    "height": 260,
+    "items": [
+      {
+        "kind": "title",
+        "text": "RetroCap Settings",
+        "box": [
+          12,
+          10,
+          126,
+          14
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "Signed in as:",
+        "box": [
+          20,
+          54,
+          90,
+          14
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "john.doe@example.com",
+        "box": [
+          137,
+          54,
+          170,
+          14
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "License key:",
+        "box": [
+          20,
+          98,
+          85,
+          14
+        ]
+      },
+      {
+        "kind": "text",
+        "text": "ABCD-1234-EFGH-5678",
+        "box": [
+          138,
+          99,
+          164,
+          10
+        ]
+      },
+      {
+        "kind": "checkbox",
+        "box": [
+          20,
+          140,
+          15,
+          15
+        ],
+        "checked": true
+      },
+      {
+        "kind": "text",
+        "text": "Upload crash reports",
+        "box": [
+          44,
+          141,
+          146,
+          14
+        ]
+      },
+      {
+        "kind": "button",
+        "text": "OK",
+        "box": [
+          309.8984375,
+          218,
+          21.0,
+          10
+        ]
+      },
+      {
+        "kind": "button",
+        "text": "Cancel",
+        "box": [
+          392.28125,
+          217,
+          47.0,
+          11
+        ]
+      }
+    ]
+  }
+}

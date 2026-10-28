@@ -1,0 +1,199 @@
+{
+ "fixture": "en_multiline.png",
+ "width": 560,
+ "height": 150,
+ "variant": "small",
+ "text_det_params": {
+  "limit_side_len": 64,
+  "limit_type": "min",
+  "thresh": 0.2,
+  "max_side_limit": 4000,
+  "box_thresh": 0.45,
+  "unclip_ratio": 1.4
+ },
+ "text_rec_score_thresh": 0.0,
+ "dt_polys": [
+  [
+   [
+    13,
+    16
+   ],
+   [
+    384,
+    17
+   ],
+   [
+    384,
+    34
+   ],
+   [
+    13,
+    33
+   ]
+  ],
+  [
+   [
+    14,
+    49
+   ],
+   [
+    370,
+    49
+   ],
+   [
+    370,
+    65
+   ],
+   [
+    14,
+    65
+   ]
+  ],
+  [
+   [
+    14,
+    81
+   ],
+   [
+    368,
+    81
+   ],
+   [
+    368,
+    98
+   ],
+   [
+    14,
+    98
+   ]
+  ],
+  [
+   [
+    14,
+    112
+   ],
+   [
+    341,
+    112
+   ],
+   [
+    341,
+    128
+   ],
+   [
+    14,
+    128
+   ]
+  ]
+ ],
+ "regions": [
+  {
+   "text": "WindowVeil places masks over extemal windows.",
+   "score": 0.9850124716758728,
+   "poly": [
+    [
+     13,
+     16
+    ],
+    [
+     384,
+     17
+    ],
+    [
+     384,
+     34
+    ],
+    [
+     13,
+     33
+    ]
+   ]
+  },
+  {
+   "text": "Text that Ul Automation cannot expose is found",
+   "score": 0.998380184173584,
+   "poly": [
+    [
+     14,
+     49
+    ],
+    [
+     370,
+     49
+    ],
+    [
+     370,
+     65
+    ],
+    [
+     14,
+     65
+    ]
+   ]
+  },
+  {
+   "text": "with on-device OCR and covered automatically.",
+   "score": 0.9988495111465454,
+   "poly": [
+    [
+     14,
+     81
+    ],
+    [
+     368,
+     81
+    ],
+    [
+     368,
+     98
+    ],
+    [
+     14,
+     98
+    ]
+   ]
+  },
+  {
+   "text": "Version 2.4.1 (build 1187), 3 items selected",
+   "score": 0.9957196712493896,
+   "poly": [
+    [
+     14,
+     112
+    ],
+    [
+     341,
+     112
+    ],
+    [
+     341,
+     128
+    ],
+    [
+     14,
+     128
+    ]
+   ]
+  }
+ ],
+ "tools": {
+  "paddleocr": "3.7.0",
+  "paddlex": "3.7.2",
+  "onnxruntime": "1.31.1",
+  "opencv": "4.10.0",
+  "numpy": "2.3.5",
+  "python": "3.13.17"
+ },
+ "models": {
+  "det": {
+   "dir": "PP-OCRv6_small_det",
+   "onnx_sha256": "d73e0058b7a8086bbd57f3d10b8bcd4ff95363f67e06e2762b5e814fe9c9410e",
+   "yml_sha256": "193f435274bf9f0b5f71a929bbfbcf148282df7e633b34e7c373e8f44741b516"
+  },
+  "rec": {
+   "dir": "PP-OCRv6_small_rec",
+   "onnx_sha256": "5435fd747c9e0efe15a96d0b378d5bd157e9492ed8fd80edf08f30d02fa24634",
+   "yml_sha256": "ab078671bb49f06228eadccd34f1bb501e157f7a047095ffb943ba81512c77d1"
+  }
+ }
+}
