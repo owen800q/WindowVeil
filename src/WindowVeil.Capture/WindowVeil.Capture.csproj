@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>WindowVeil.Capture</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>GDI screen and window capture for WindowVeil (BitBlt of the composed desktop, PrintWindow of a single window) producing BgraImage frames for OCR and screenshots.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowVeil.Core\WindowVeil.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowVeil.NativeTests" />
+  </ItemGroup>
+</Project>

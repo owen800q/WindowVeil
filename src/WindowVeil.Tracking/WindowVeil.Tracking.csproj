@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>WindowVeil.Tracking</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>Window tracking for WindowVeil: WinEvent hooks (no injection) and a polling fallback that report moves, resizes, visibility, foreground and content changes of target windows.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WindowVeil.Core\WindowVeil.Core.csproj" />
+    <ProjectReference Include="..\WindowVeil.Native\WindowVeil.Native.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowVeil.NativeTests" />
+    <InternalsVisibleTo Include="WindowVeil.UnitTests" />
+  </ItemGroup>
+</Project>
